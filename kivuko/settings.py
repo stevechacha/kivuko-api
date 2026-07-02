@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import dj_database_url
+from corsheaders.defaults import default_headers
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -134,6 +135,11 @@ CORS_ALLOWED_ORIGIN_REGEXES = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOW_HEADERS = (
+    *default_headers,
+    "x-session-token",
+)
 
 PUBLIC_VERIFY_BASE_URL = os.environ.get(
     "PUBLIC_VERIFY_BASE_URL",
