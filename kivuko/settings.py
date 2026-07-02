@@ -128,6 +128,11 @@ CORS_ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 
+# Allow Railway preview/production web URLs without manual env updates.
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://[\w-]+\.up\.railway\.app$",
+]
+
 CORS_ALLOW_CREDENTIALS = True
 
 PUBLIC_VERIFY_BASE_URL = os.environ.get(
