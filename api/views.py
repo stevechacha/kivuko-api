@@ -37,13 +37,36 @@ from api.serializers import (
     ParticipantSerializer,
     QuizQuestionSerializer,
     QuizSubmitSerializer,
+    LoginSerializer,
     RegisterSerializer,
     SendMessageSerializer,
+    SessionSerializer,
     TimelineEventSerializer,
 )
 from api.progress import build_mission_progress, mark_step_complete
 from api.grades import patriotism_grade, MISSION_STEPS
 from api.utils import build_verify_url, qr_data_url
+
+
+def _normalize_phone(phone: str) -> str:
+    return "".join(ch for ch in phone if ch.isdigit())
+
+
+def _session_payload(participant: Participant, message: str | None = None) -> dict:
+    active = (
+        Match.objects.filter(participant=participant, status="active")
+        .select_related("mission")
+        .order_by("-created_at")
+        .first()
+    )
+    payload = {
+        "participant": participant,
+        "active_mission_id": active.mission_id if active else None,
+        "active_match_id": active.id if active else None,
+    }
+    if message:
+        payload["message"] = message
+    return payload
 
 STATUS_MESSAGES = [
     "Inatafuta wanachama Visiwani…",
@@ -125,6 +148,21 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        phone_key = _normalize_phone(data["phone"])
+        existing = (
+            Participant.objects.filter(is_seed_peer=False)
+            .order_by("-created_at")
+        )
+        for p in existing:
+            if _normalize_phone(p.phone) == phone_key:
+                return Response(
+                    {
+                        "detail": "Namba hii tayari imesajiliwa. Tumia Ingia (Login) badala yake.",
+                        "login_required": True,
+                    },
+                    status=status.HTTP_409_CONFLICT,
+                )
+
         participant = Participant.objects.create(
             name=data["name"],
             phone=data["phone"],
@@ -133,11 +171,33 @@ class RegisterView(APIView):
             region=data["region"],
         )
         return Response(
-            {
-                "message": "Karibu, Mzalendo!",
-                "participant": ParticipantSerializer(participant).data,
-            },
+            SessionSerializer(_session_payload(participant, "Karibu, Mzalendo!")).data,
             status=status.HTTP_201_CREATED,
+        )
+
+
+class LoginView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        serializer = LoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        phone_key = _normalize_phone(serializer.validated_data["phone"])
+        participant = None
+        for p in Participant.objects.filter(is_seed_peer=False).order_by("-created_at"):
+            if _normalize_phone(p.phone) == phone_key:
+                participant = p
+                break
+        if not participant:
+            return Response(
+                {"detail": "Namba hii haijasajiliwa. Jisajili kwanza."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        return Response(
+            SessionSerializer(
+                _session_payload(participant, f"Karibu tena, {participant.name.split()[0]}!")
+            ).data
         )
 
 
@@ -146,7 +206,7 @@ class UserMeView(APIView):
         participant = request.user
         if not isinstance(participant, Participant):
             return Response({"detail": "Authentication required."}, status=401)
-        return Response(ParticipantSerializer(participant).data)
+        return Response(SessionSerializer(_session_payload(participant)).data)
 
 
 class MatchView(APIView):

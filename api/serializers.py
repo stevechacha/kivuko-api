@@ -51,6 +51,17 @@ class RegisterSerializer(serializers.Serializer):
     region = serializers.ChoiceField(choices=["bara", "visiwani"])
 
 
+class LoginSerializer(serializers.Serializer):
+    phone = serializers.CharField(max_length=30)
+
+
+class SessionSerializer(serializers.Serializer):
+    message = serializers.CharField(required=False)
+    participant = ParticipantSerializer()
+    active_mission_id = serializers.UUIDField(allow_null=True)
+    active_match_id = serializers.UUIDField(allow_null=True)
+
+
 class MatchResultSerializer(serializers.Serializer):
     match_id = serializers.UUIDField()
     mission_id = serializers.UUIDField()

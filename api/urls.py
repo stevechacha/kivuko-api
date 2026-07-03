@@ -16,12 +16,14 @@ from api.views import (
     QuizQuestionsView,
     QuizSubmitView,
     RegisterView,
+    LoginView,
     TimelineEventsView,
     UserMeView,
 )
 
 urlpatterns = [
     path("users/register", RegisterView.as_view(), name="register"),
+    path("users/login", LoginView.as_view(), name="login"),
     path("users/me", UserMeView.as_view(), name="user-me"),
     path("users/me/progress", MissionProgressView.as_view(), name="mission-progress"),
     path("users/me/steps/<int:step_number>/complete", MissionStepCompleteView.as_view(), name="step-complete"),
