@@ -362,7 +362,10 @@ class PartnerDashboardSerializer(serializers.Serializer):
     regions_active = serializers.IntegerField()
     institutions = PartnerInstitutionSerializer(many=True)
     pending_elder_stories = serializers.IntegerField()
+    elder_radio_nominees = serializers.IntegerField()
+    auto_flagged_pending = serializers.IntegerField()
     rewards_pending_tzs = serializers.IntegerField()
+    recent_certificates = serializers.ListField(child=serializers.DictField())
 
 
 class RadioYouthNomineeSerializer(serializers.Serializer):

@@ -16,6 +16,7 @@ from api.cert_pdf import build_certificate_pdf
 from api.grades import patriotism_grade
 from api.models import (
     Certificate,
+    ContentReport,
     ElderRadioNominee,
     ElderStory,
     GalaNominee,
@@ -255,6 +256,15 @@ class PartnerDashboardView(APIView):
                 }
             )
 
+        recent_certs = [
+            {
+                "cert_code": c.cert_code,
+                "user_name": c.participant.name,
+                "issued_date": c.issued_at.strftime("%d/%m/%Y"),
+            }
+            for c in Certificate.objects.select_related("participant").order_by("-issued_at")[:5]
+        ]
+
         return Response(
             PartnerDashboardSerializer(
                 {
@@ -267,10 +277,16 @@ class PartnerDashboardView(APIView):
                     "regions_active": MapConnection.objects.values("from_region").distinct().count(),
                     "institutions": institutions,
                     "pending_elder_stories": ElderStory.objects.filter(status=ElderStory.Status.PENDING).count(),
+                    "elder_radio_nominees": ElderRadioNominee.objects.count(),
+                    "auto_flagged_pending": ContentReport.objects.filter(
+                        status=ContentReport.Status.PENDING,
+                        auto_flagged=True,
+                    ).count(),
                     "rewards_pending_tzs": RewardDisbursement.objects.filter(
                         status=RewardDisbursement.Status.PENDING
                     ).aggregate(total=Sum("amount_tzs"))["total"]
                     or 0,
+                    "recent_certificates": recent_certs,
                 }
             ).data
         )

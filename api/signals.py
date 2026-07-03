@@ -5,6 +5,8 @@ from api.models import (
     ChatMessage,
     ContentReport,
     ElderAudio,
+    ElderRadioNominee,
+    ElderStory,
     Institution,
     Match,
     Mission,
@@ -169,6 +171,67 @@ def seed_demo_data(sender, **kwargs):
     _seed_demo_peers()
     _seed_demo_moderation_queue()
     _seed_institutions()
+    _seed_demo_elders_radio()
+
+
+ELDER_STORY_SEEDS = [
+    {
+        "contributor_name": "Bibi Fatuma Hassan",
+        "home_area": "Pemba",
+        "region": Region.VISIWANI,
+        "title": "Siku ya Muungano 1964 — Nilivyosikia",
+        "body": (
+            "Nilikuwa kijana mdogo Pemba tarehe 26 Aprili 1964. Radio ilisoma taarifa ya Muungano — "
+            "Tanganyika na Zanzibar kuwa taifa moja. Watu walitoka nje kuimba Wimbo wa Taifa. "
+            "Hiyo ndiyo siku nilipojua umoja si maneno tu, ni maisha yetu."
+        ),
+        "audio_url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Tanzania_national_anthem_instrumental.ogg",
+    },
+    {
+        "contributor_name": "Babu Elias Mwakyusa",
+        "home_area": "Kigoma",
+        "region": Region.BARA,
+        "title": "Safari ya Mwalimu Nyerere hadi Zanzibar",
+        "body": (
+            "Babu alituambia jinsi viongozi walivyokaa pamoja kujadili Muungano bila kukosa heshima. "
+            "Alisema uaminifu kwa taifa ni msingi wa amani — somo linalofaa kwa vijana wa leo."
+        ),
+    },
+    {
+        "contributor_name": "Mama Asha Said",
+        "home_area": "Unguja",
+        "region": Region.VISIWANI,
+        "title": "Biashara kati ya Bara na Visiwani",
+        "body": (
+            "Baada ya Muungano, biashara ya viungo na mchele ilifungua fursa kwa familia nyingi. "
+            "Visiwani na Bara vilikuwa soko moja — hilo ndilo urithi wa kiuchumi wa Muungano."
+        ),
+    },
+]
+
+
+def _seed_demo_elders_radio() -> None:
+    if ElderRadioNominee.objects.exists():
+        return
+
+    created = []
+    for item in ELDER_STORY_SEEDS:
+        story, _ = ElderStory.objects.get_or_create(
+            contributor_name=item["contributor_name"],
+            title=item["title"],
+            defaults={
+                **item,
+                "status": ElderStory.Status.APPROVED,
+            },
+        )
+        if story.status != ElderStory.Status.APPROVED:
+            story.status = ElderStory.Status.APPROVED
+            story.save(update_fields=["status"])
+        created.append(story)
+
+    for story in created[:3]:
+        if ElderRadioNominee.objects.count() < 10:
+            ElderRadioNominee.objects.get_or_create(story=story)
 
 
 INSTITUTION_SEEDS = [
@@ -249,4 +312,5 @@ def _seed_demo_moderation_queue() -> None:
         reported=visi,
         reason=ContentReport.Reason.CONTACT,
         excerpt=excerpt,
+        auto_flagged=True,
     )
