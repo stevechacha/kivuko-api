@@ -75,6 +75,21 @@ class ChatMessageSerializer(serializers.ModelSerializer):
         fields = ["id", "from_role", "text", "created_at"]
 
 
+class PeerSummarySerializer(serializers.ModelSerializer):
+    region_label = serializers.CharField(read_only=True)
+    initials = serializers.CharField(read_only=True)
+
+    class Meta:
+        model = Participant
+        fields = ["id", "name", "initials", "region", "region_label", "home_area"]
+
+
+class ChatThreadSerializer(serializers.Serializer):
+    peer = PeerSummarySerializer()
+    mission_title = serializers.CharField()
+    messages = ChatMessageSerializer(many=True)
+
+
 class SendMessageSerializer(serializers.Serializer):
     text = serializers.CharField(max_length=2000)
 

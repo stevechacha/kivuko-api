@@ -81,9 +81,18 @@ class ChatMessage(models.Model):
     from_role = models.CharField(max_length=10)  # me | peer | system
     text = models.TextField()
     created_at = models.DateTimeField(auto_now_add=True)
+    deliver_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["created_at"]
+
+    @property
+    def is_visible(self) -> bool:
+        from django.utils import timezone
+
+        if self.deliver_at is None:
+            return True
+        return self.deliver_at <= timezone.now()
 
 
 class QuizQuestion(models.Model):

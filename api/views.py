@@ -1,7 +1,8 @@
+from datetime import timedelta
 import random
 
 from django.db import transaction
-from django.db.models import Count
+from django.db.models import Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -27,6 +28,7 @@ from api.serializers import (
     AdminDashboardSerializer,
     CertificateSerializer,
     ChatMessageSerializer,
+    ChatThreadSerializer,
     ChemshaBongoResultSerializer,
     ChemshaBongoSubmitSerializer,
     ElderAudioSerializer,
@@ -78,7 +80,34 @@ PEER_REPLIES = [
     "Vizuri sana! 🙌",
     "Nakubaliana nawe.",
     "Hii ni sehemu yangu pendwa ya historia yetu!",
+    "Sawa kabisa — tuendelee pamoja.",
+    "Hongera kwa ujasiri wako wa kujifunza historia ya taifa!",
 ]
+
+
+def _peer_reply_text(user_text: str) -> str:
+    lowered = user_text.lower()
+    if any(w in lowered for w in ("1964", "muungano", "union", "april", "aprili")):
+        return "Ndio! 26 Aprili 1964 — siku muhimu kwa taifa letu. 🇹🇿"
+    if any(w in lowered for w in ("habari", "mambo", "salamu", "hello", "hi")):
+        return "Marahaba! Niko tayari kwa dhamira yetu ya pamoja 😊"
+    if any(w in lowered for w in ("asante", "thanks", "shukrani")):
+        return "Karibu sana! Muungano ni nguvu yetu pamoja. 💪"
+    if any(w in lowered for w in ("nyerere", "karume", "wazee", "baba")):
+        return "Wazee wetu walituacha urithi wa umoja — tuendelee kuheshimu. 🙏"
+    if "?" in user_text:
+        return "Swali zuri! Hebu tujaribu kujibu pamoja kwenye jaribio. 📝"
+    return random.choice(PEER_REPLIES)
+
+
+def _mission_peer(mission: Mission, participant: Participant) -> Participant:
+    match = mission.match
+    return match.peer if match.participant_id == participant.id else match.participant
+
+
+def _visible_messages(mission: Mission):
+    now = timezone.now()
+    return mission.messages.filter(Q(deliver_at__isnull=True) | Q(deliver_at__lte=now))
 
 
 def _opposite_region(region: str) -> str:
@@ -261,35 +290,49 @@ class MissionChatView(APIView):
         )
         if participant.id not in (mission.match.participant_id, mission.match.peer_id):
             return Response({"detail": "Not allowed."}, status=403)
-        messages = mission.messages.all()
-        return Response(ChatMessageSerializer(messages, many=True).data)
+        peer = _mission_peer(mission, participant)
+        messages = _visible_messages(mission)
+        return Response(
+            ChatThreadSerializer(
+                {
+                    "peer": peer,
+                    "mission_title": mission.title,
+                    "messages": messages,
+                }
+            ).data
+        )
 
     def post(self, request, mission_id):
         participant = request.user
         serializer = SendMessageSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        mission = Mission.objects.select_related("match").get(id=mission_id)
+        mission = Mission.objects.select_related("match__peer", "match__participant").get(
+            id=mission_id
+        )
         if participant.id not in (mission.match.participant_id, mission.match.peer_id):
             return Response({"detail": "Not allowed."}, status=403)
 
-        text = serializer.validated_data["text"]
+        text = serializer.validated_data["text"].strip()
+        if not text:
+            return Response({"detail": "Ujumbe hauwezi kuwa tupu."}, status=400)
+
         mine = ChatMessage.objects.create(
             mission=mission,
             sender=participant,
             from_role="me",
             text=text,
         )
-        peer_reply = ChatMessage.objects.create(
+        peer = _mission_peer(mission, participant)
+        delay_seconds = random.uniform(1.4, 3.2)
+        ChatMessage.objects.create(
             mission=mission,
-            sender=mission.match.peer if mission.match.participant_id == participant.id else mission.match.participant,
+            sender=peer,
             from_role="peer",
-            text=random.choice(PEER_REPLIES),
+            text=_peer_reply_text(text),
+            deliver_at=timezone.now() + timedelta(seconds=delay_seconds),
         )
         return Response(
-            {
-                "sent": ChatMessageSerializer(mine).data,
-                "reply": ChatMessageSerializer(peer_reply).data,
-            },
+            {"sent": ChatMessageSerializer(mine).data},
             status=status.HTTP_201_CREATED,
         )
 
@@ -595,4 +638,53 @@ class ChemshaBongoView(APIView):
                     "grade": patriotism_grade(participant.patriotism_points),
                 }
             ).data
+        )
+
+
+def _whatsapp_bot_reply(text: str) -> str:
+    lowered = text.strip().lower()
+    if not lowered:
+        return (
+            "Habari Mzalendo! 🌊\n"
+            "Mimi ni Kivuko Bot. Andika *MUUNGANO* kuanza, au *JARIBIO* kwa maswali ya historia."
+        )
+    if lowered in ("muungano", "start", "anza", "hi", "habari"):
+        return (
+            "Karibu Kivuko la Muungano Hub! 🇹🇿\n\n"
+            "Jaribu la leo: Muungano wa Tanganyika na Zanzibar ulianzishwa tarehe gani?\n"
+            "A) 9 Desemba 1961\n"
+            "B) 26 Aprili 1964\n"
+            "C) 12 Januari 1964"
+        )
+    if "1964" in lowered or "b" in lowered.split() or "26" in lowered:
+        return "Sahihi! 🎉 +10 Pointi za Uzalendo.\nAndika *JARIBIO* kwa maswali zaidi, au *SIMU* kujisajili kwenye wavuti."
+    if lowered in ("jaribio", "quiz", "maswali"):
+        return (
+            "Swali 2: Nani alikuwa Rais wa kwanza wa Zanzibar?\n"
+            "A) Julius Nyerere\n"
+            "B) Abeid Amani Karume\n"
+            "C) Benjamin Mkapa"
+        )
+    if "karume" in lowered or lowered == "b":
+        return "Hongera! +10 Pointi za Uzalendo. ⭐\nTembelea wavuti kwa dhamira kamili na cheti cha QR."
+    if lowered in ("simu", "web", "wavuti", "register"):
+        return "Jisajili bure: kivuko-web-production.up.railway.app/usajili 📱"
+    if "?" in text:
+        return "Swali zuri! Kwa majibu kamili, jiunge na dhamira ya pamoja kwenye wavuti yetu."
+    return "Asante kwa ujumbe wako! Andika *JARIBIO* au *MUUNGANO* kuendelea. 🇹🇿"
+
+
+class WhatsAppBotView(APIView):
+    """Stateless WhatsApp-style civic bot for omnichannel demo."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        text = (request.data.get("text") or "").strip()
+        return Response(
+            {
+                "reply": _whatsapp_bot_reply(text),
+                "channel": "whatsapp",
+            }
         )

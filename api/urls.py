@@ -19,6 +19,7 @@ from api.views import (
     LoginView,
     TimelineEventsView,
     UserMeView,
+    WhatsAppBotView,
 )
 
 urlpatterns = [
@@ -40,4 +41,5 @@ urlpatterns = [
     path("admin/dashboard", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("map/stats", MapStatsView.as_view(), name="map-stats"),
     path("audio/archive", ElderAudioView.as_view(), name="audio-archive"),
+    path("channels/whatsapp/chat", WhatsAppBotView.as_view(), name="whatsapp-bot"),
 ]
