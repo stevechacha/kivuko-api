@@ -40,6 +40,8 @@ from api.serializers import (
     RadioPartnerSerializer,
     RewardDisbursementSerializer,
     RewardDisburseSerializer,
+    RadioBroadcastScriptSerializer,
+    UserRewardSerializer,
 )
 from api.views import (
     _report_time_label,
@@ -110,31 +112,128 @@ class ElderStoriesPublicView(APIView):
         return Response(ElderStorySerializer([_serialize_elder_story(s) for s in stories], many=True).data)
 
 
+def _elder_radio_entries() -> list[dict]:
+    nominees = (
+        ElderRadioNominee.objects.select_related("story")
+        .filter(story__status=ElderStory.Status.APPROVED)
+        .order_by("-added_at")[:10]
+    )
+    entries = []
+    for i, nom in enumerate(nominees, start=1):
+        story = nom.story
+        entries.append(
+            {
+                "rank": i,
+                "story_id": story.id,
+                "contributor_name": story.contributor_name,
+                "title": story.title,
+                "home_area": story.home_area,
+                "region_label": "Zanzibar" if story.region == Region.VISIWANI else "Mainland",
+                "audio_url": story.audio_url,
+            }
+        )
+    return entries
+
+
+def _build_radio_scripts(entries: list[dict]) -> tuple[str, str]:
+    sw_lines = [
+        "SEGMENT: Kivuko la Muungano Hub — Wazee Top 10",
+        "Kila mwaka, hadithi za wazee zinazoidhinishwa zinatambuliwa kwenye redio ya taifa.",
+        "",
+    ]
+    en_lines = [
+        "SEGMENT: Union Bridge Hub — Elder Top 10",
+        "Each year, approved elder oral histories are honoured on national radio.",
+        "",
+    ]
+    for entry in entries:
+        sw_lines.append(
+            f"{entry['rank']}. {entry['contributor_name']} — {entry['home_area']} ({entry['region_label']})"
+        )
+        sw_lines.append(f"   \"{entry['title']}\"")
+        sw_lines.append("")
+        en_lines.append(
+            f"{entry['rank']}. {entry['contributor_name']} — {entry['home_area']} ({entry['region_label']})"
+        )
+        en_lines.append(f"   \"{entry['title']}\"")
+        en_lines.append("")
+    sw_lines.append("Asante. Sisi kwa Sisi — Bara na Visiwani, Kizazi Kimoja, Taifa Moja.")
+    en_lines.append("Thank you. Us for us — Mainland and Isles, One Generation, One Nation.")
+    return "\n".join(sw_lines), "\n".join(en_lines)
+
+
 class ElderRadioTop10View(APIView):
     authentication_classes = []
     permission_classes = []
 
     def get(self, request):
-        nominees = (
-            ElderRadioNominee.objects.select_related("story")
-            .filter(story__status=ElderStory.Status.APPROVED)
-            .order_by("-added_at")[:10]
-        )
-        entries = []
-        for i, nom in enumerate(nominees, start=1):
-            story = nom.story
-            entries.append(
-                {
-                    "rank": i,
-                    "story_id": story.id,
-                    "contributor_name": story.contributor_name,
-                    "title": story.title,
-                    "home_area": story.home_area,
-                    "region_label": "Zanzibar" if story.region == Region.VISIWANI else "Mainland",
-                    "audio_url": story.audio_url,
-                }
-            )
+        entries = _elder_radio_entries()
         return Response(ElderRadioEntrySerializer(entries, many=True).data)
+
+
+class RadioBroadcastScriptView(APIView):
+    """Copy-ready radio segment script for broadcast partners."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        entries = _elder_radio_entries()
+        script_sw, script_en = _build_radio_scripts(entries)
+        return Response(
+            RadioBroadcastScriptSerializer(
+                {
+                    "station_name": "Radio Taifa — Muungano Segment",
+                    "segment_title": "Top 10 Elder Contributors",
+                    "broadcast_ready": len(entries) >= 3,
+                    "script_sw": script_sw,
+                    "script_en": script_en,
+                    "nominees": entries,
+                }
+            ).data
+        )
+
+
+class MyRewardsView(APIView):
+    """Youth-facing micro-reward ledger (airtime / M-Pesa sandbox)."""
+
+    def get(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+
+        rewards = RewardDisbursement.objects.filter(participant=participant).order_by("-created_at")[:20]
+        payload = [
+            {
+                "id": r.id,
+                "amount_tzs": r.amount_tzs,
+                "reward_type": r.reward_type,
+                "status": r.status,
+                "source": r.source or "Mission reward",
+                "created_at_label": _report_time_label(r.created_at),
+            }
+            for r in rewards
+        ]
+        pending_total = (
+            RewardDisbursement.objects.filter(
+                participant=participant,
+                status=RewardDisbursement.Status.PENDING,
+            ).aggregate(total=Sum("amount_tzs"))["total"]
+            or 0
+        )
+        return Response(
+            {
+                "rewards": UserRewardSerializer(payload, many=True).data,
+                "pending_total_tzs": pending_total,
+                "sent_total_tzs": (
+                    RewardDisbursement.objects.filter(
+                        participant=participant,
+                        status=RewardDisbursement.Status.SENT,
+                    ).aggregate(total=Sum("amount_tzs"))["total"]
+                    or 0
+                ),
+            }
+        )
 
 
 class AdminElderStoriesView(APIView):

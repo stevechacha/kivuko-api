@@ -420,3 +420,21 @@ class RewardDisbursementSerializer(serializers.Serializer):
 
 class RewardDisburseSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["send", "processing", "fail"])
+
+
+class UserRewardSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    amount_tzs = serializers.IntegerField()
+    reward_type = serializers.CharField()
+    status = serializers.CharField()
+    source = serializers.CharField()
+    created_at_label = serializers.CharField()
+
+
+class RadioBroadcastScriptSerializer(serializers.Serializer):
+    station_name = serializers.CharField()
+    segment_title = serializers.CharField()
+    broadcast_ready = serializers.BooleanField()
+    script_sw = serializers.CharField()
+    script_en = serializers.CharField()
+    nominees = ElderRadioEntrySerializer(many=True)

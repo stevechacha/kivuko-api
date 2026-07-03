@@ -10,6 +10,7 @@ from api.models import (
     Institution,
     Match,
     Mission,
+    OralStory,
     Participant,
     Region,
     TimelineEvent,
@@ -172,6 +173,7 @@ def seed_demo_data(sender, **kwargs):
     _seed_demo_moderation_queue()
     _seed_institutions()
     _seed_demo_elders_radio()
+    _seed_demo_oral_archive()
 
 
 ELDER_STORY_SEEDS = [
@@ -232,6 +234,43 @@ def _seed_demo_elders_radio() -> None:
     for story in created[:3]:
         if ElderRadioNominee.objects.count() < 10:
             ElderRadioNominee.objects.get_or_create(story=story)
+
+
+ORAL_STORY_SEEDS = [
+    {
+        "title": "Muungano katika Maisha Yangu",
+        "author_name": "Amina Juma",
+        "body": (
+            "Nilipokutana na rafiki kutoka Pemba kupitia Kivuko, nilijifunza kwamba Muungano si tarehe tu "
+            "— ni uhusiano wa kila siku. Tulishiriki mila, tulijibu jaribio pamoja, na leo tunaheshimiana kama ndugu."
+        ),
+    },
+    {
+        "title": "Nyerere na Karume — Kumbukumbu ya Vijana",
+        "author_name": "Joseph Mwangi",
+        "body": (
+            "Kupitia dhamira ya historia, tulisikiliza sauti za wazee na kuelewa jinsi viongozi wawili "
+            "walijenga msingi wa taifa moja. Hii ndiyo elimu inayobaki moyoni."
+        ),
+    },
+]
+
+
+def _seed_demo_oral_archive() -> None:
+    if OralStory.objects.filter(status=OralStory.Status.APPROVED).exists():
+        return
+    author = Participant.objects.filter(is_seed_peer=False).first() or Participant.objects.first()
+    if not author:
+        return
+    for item in ORAL_STORY_SEEDS:
+        OralStory.objects.get_or_create(
+            title=item["title"],
+            defaults={
+                **item,
+                "participant": author,
+                "status": OralStory.Status.APPROVED,
+            },
+        )
 
 
 INSTITUTION_SEEDS = [

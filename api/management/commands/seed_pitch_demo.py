@@ -1,7 +1,7 @@
 from django.core.management.base import BaseCommand
 
 from api.models import ContentReport
-from api.signals import _seed_demo_elders_radio
+from api.signals import _seed_demo_elders_radio, _seed_demo_oral_archive
 
 
 class Command(BaseCommand):
@@ -9,6 +9,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         _seed_demo_elders_radio()
+        _seed_demo_oral_archive()
         updated = ContentReport.objects.filter(
             reason=ContentReport.Reason.CONTACT,
             auto_flagged=False,

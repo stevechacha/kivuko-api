@@ -998,6 +998,17 @@ class OralStorySubmitView(APIView):
         return Response(OralStorySerializer(_serialize_story(story)).data, status=status.HTTP_201_CREATED)
 
 
+class OralStoriesArchiveView(APIView):
+    """Approved patriotism / oral stories for the public archive."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        stories = OralStory.objects.filter(status=OralStory.Status.APPROVED).order_by("-created_at")[:40]
+        return Response(OralStorySerializer([_serialize_story(s) for s in stories], many=True).data)
+
+
 class AdminStoriesView(APIView):
     authentication_classes = []
     permission_classes = []
