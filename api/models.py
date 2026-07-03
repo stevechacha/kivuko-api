@@ -1,7 +1,6 @@
 import secrets
 import uuid
 
-from django.conf import settings
 from django.db import models
 
 
@@ -119,8 +118,9 @@ class Certificate(models.Model):
 
     @property
     def verify_url(self) -> str:
-        base = getattr(settings, "PUBLIC_VERIFY_BASE_URL", "https://kivukohub.go.tz/verify")
-        return f"{base.rstrip('/')}/{self.cert_code}"
+        from api.utils import build_verify_url
+
+        return build_verify_url(self.cert_code)
 
 
 class MapConnection(models.Model):
@@ -145,6 +145,25 @@ class ElderAudio(models.Model):
     area = models.CharField(max_length=80)
     duration_label = models.CharField(max_length=120)
     audio_url = models.URLField(blank=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order"]
+
+
+class AcademyCategory(models.TextChoices):
+    ARMY = "army", "Historia ya JWTZ"
+    UNION = "union", "Makumbusho ya Muungano"
+    PATRIOT = "patriot", "Misingi ya Uzalendo"
+
+
+class AcademyArticle(models.Model):
+    external_id = models.CharField(max_length=30, unique=True)
+    category = models.CharField(max_length=20, choices=AcademyCategory.choices)
+    title = models.CharField(max_length=200)
+    summary = models.TextField()
+    body = models.TextField()
+    badge_label = models.CharField(max_length=80, blank=True)
     sort_order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:

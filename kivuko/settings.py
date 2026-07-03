@@ -145,3 +145,10 @@ PUBLIC_VERIFY_BASE_URL = os.environ.get(
     "PUBLIC_VERIFY_BASE_URL",
     "https://kivukohub.go.tz/verify",
 )
+
+PUBLIC_APP_BASE_URL = os.environ.get(
+    "PUBLIC_APP_BASE_URL",
+    "http://localhost:8081",
+)
+
+ADMIN_DASHBOARD_KEY = os.environ.get("ADMIN_DASHBOARD_KEY", "")

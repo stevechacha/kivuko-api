@@ -1,12 +1,14 @@
 import random
 
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from api.models import (
+    AcademyArticle,
     Certificate,
     ChatMessage,
     ElderAudio,
@@ -19,6 +21,8 @@ from api.models import (
     Region,
 )
 from api.serializers import (
+    AcademyArticleSerializer,
+    AdminDashboardSerializer,
     CertificateSerializer,
     ChatMessageSerializer,
     ElderAudioSerializer,
@@ -31,6 +35,7 @@ from api.serializers import (
     RegisterSerializer,
     SendMessageSerializer,
 )
+from api.utils import build_verify_url, qr_data_url
 
 STATUS_MESSAGES = [
     "Inatafuta wanachama Visiwani…",
@@ -105,6 +110,9 @@ def _seed_chat(mission: Mission, participant: Participant, peer: Participant) ->
 
 
 class RegisterView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -123,6 +131,14 @@ class RegisterView(APIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class UserMeView(APIView):
+    def get(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+        return Response(ParticipantSerializer(participant).data)
 
 
 class MatchView(APIView):
@@ -314,11 +330,71 @@ class CertificateVerifyView(APIView):
             cert = Certificate.objects.select_related("participant").get(cert_code=cert_code)
         except Certificate.DoesNotExist:
             return Response({"valid": False, "detail": "Certificate not found."}, status=404)
+        verify_url = build_verify_url(cert.cert_code)
         return Response(
             {
                 "valid": True,
                 "certificate": CertificateSerializer(cert).data,
+                "verify_url": verify_url,
+                "qr_data_url": qr_data_url(verify_url),
             }
+        )
+
+
+class AcademyArticlesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        category = request.query_params.get("category")
+        qs = AcademyArticle.objects.all()
+        if category:
+            qs = qs.filter(category=category)
+        return Response(AcademyArticleSerializer(qs, many=True).data)
+
+
+class AdminDashboardView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        from django.conf import settings
+
+        admin_key = getattr(settings, "ADMIN_DASHBOARD_KEY", "")
+        if admin_key and request.headers.get("X-Admin-Key") != admin_key:
+            return Response({"detail": "Admin key required."}, status=403)
+
+        today = timezone.localdate()
+        connections = MapConnection.objects.all()[:20]
+        regions = set()
+        for c in connections:
+            regions.add(c.from_region)
+            regions.add(c.to_region)
+
+        region_counts = (
+            Participant.objects.filter(is_seed_peer=False)
+            .values("region")
+            .annotate(count=Count("id"))
+        )
+        bara = next((r["count"] for r in region_counts if r["region"] == Region.BARA), 0)
+        visiwani = next((r["count"] for r in region_counts if r["region"] == Region.VISIWANI), 0)
+
+        return Response(
+            AdminDashboardSerializer(
+                {
+                    "total_participants": Participant.objects.filter(is_seed_peer=False).count(),
+                    "seed_peers": Participant.objects.filter(is_seed_peer=True).count(),
+                    "active_matches": Match.objects.filter(status="active").count(),
+                    "completed_missions": Mission.objects.filter(status="completed").count(),
+                    "certificates_issued": Certificate.objects.count(),
+                    "pairs_today": Match.objects.filter(created_at__date=today).count()
+                    or Match.objects.filter(status="active").count(),
+                    "regions_active": len(regions) or 14,
+                    "bara_participants": bara,
+                    "visiwani_participants": visiwani,
+                    "recent_connections": connections,
+                }
+            ).data
         )
 
 

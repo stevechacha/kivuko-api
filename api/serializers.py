@@ -9,6 +9,7 @@ from api.models import (
     Mission,
     Participant,
     QuizQuestion,
+    AcademyArticle,
 )
 
 
@@ -84,13 +85,19 @@ class CertificateSerializer(serializers.ModelSerializer):
     verify_url = serializers.CharField(read_only=True)
     user_name = serializers.CharField(source="participant.name", read_only=True)
     issued_date = serializers.SerializerMethodField()
+    qr_data_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Certificate
-        fields = ["cert_code", "user_name", "verify_url", "issued_date"]
+        fields = ["cert_code", "user_name", "verify_url", "issued_date", "qr_data_url"]
 
     def get_issued_date(self, obj):
         return obj.issued_at.strftime("%d/%m/%Y")
+
+    def get_qr_data_url(self, obj):
+        from api.utils import build_verify_url, qr_data_url
+
+        return qr_data_url(build_verify_url(obj.cert_code))
 
 
 class MapConnectionSerializer(serializers.ModelSerializer):
@@ -113,3 +120,24 @@ class ElderAudioSerializer(serializers.ModelSerializer):
     class Meta:
         model = ElderAudio
         fields = ["id", "name", "area", "duration_label", "audio_url"]
+
+
+class AcademyArticleSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source="external_id")
+
+    class Meta:
+        model = AcademyArticle
+        fields = ["id", "category", "title", "summary", "body", "badge_label"]
+
+
+class AdminDashboardSerializer(serializers.Serializer):
+    total_participants = serializers.IntegerField()
+    seed_peers = serializers.IntegerField()
+    active_matches = serializers.IntegerField()
+    completed_missions = serializers.IntegerField()
+    certificates_issued = serializers.IntegerField()
+    pairs_today = serializers.IntegerField()
+    regions_active = serializers.IntegerField()
+    bara_participants = serializers.IntegerField()
+    visiwani_participants = serializers.IntegerField()
+    recent_connections = MapConnectionSerializer(many=True)

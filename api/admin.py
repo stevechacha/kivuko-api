@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from api.models import (
+    AcademyArticle,
     Certificate,
     ChatMessage,
     ElderAudio,
@@ -58,3 +59,9 @@ class MapConnectionAdmin(admin.ModelAdmin):
 @admin.register(ElderAudio)
 class ElderAudioAdmin(admin.ModelAdmin):
     list_display = ("external_id", "name", "area", "duration_label")
+
+
+@admin.register(AcademyArticle)
+class AcademyArticleAdmin(admin.ModelAdmin):
+    list_display = ("external_id", "category", "title", "sort_order")
+    list_filter = ("category",)
