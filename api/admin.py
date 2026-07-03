@@ -8,9 +8,11 @@ from api.models import (
     MapConnection,
     Match,
     Mission,
+    MissionStepProgress,
     Participant,
     QuizQuestion,
     QuizSubmission,
+    TimelineEvent,
 )
 
 
@@ -65,3 +67,13 @@ class ElderAudioAdmin(admin.ModelAdmin):
 class AcademyArticleAdmin(admin.ModelAdmin):
     list_display = ("external_id", "category", "title", "sort_order")
     list_filter = ("category",)
+
+
+@admin.register(TimelineEvent)
+class TimelineEventAdmin(admin.ModelAdmin):
+    list_display = ("external_id", "year", "title", "sort_order")
+
+
+@admin.register(MissionStepProgress)
+class MissionStepProgressAdmin(admin.ModelAdmin):
+    list_display = ("participant", "step_number", "completed_at")

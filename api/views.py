@@ -15,17 +15,22 @@ from api.models import (
     MapConnection,
     Match,
     Mission,
+    MissionStepProgress,
     Participant,
     QuizQuestion,
     QuizSubmission,
     Region,
+    TimelineEvent,
 )
 from api.serializers import (
     AcademyArticleSerializer,
     AdminDashboardSerializer,
     CertificateSerializer,
     ChatMessageSerializer,
+    ChemshaBongoResultSerializer,
+    ChemshaBongoSubmitSerializer,
     ElderAudioSerializer,
+    LeaderboardEntrySerializer,
     MapStatsSerializer,
     MatchResultSerializer,
     MissionCompleteSerializer,
@@ -34,7 +39,10 @@ from api.serializers import (
     QuizSubmitSerializer,
     RegisterSerializer,
     SendMessageSerializer,
+    TimelineEventSerializer,
 )
+from api.progress import build_mission_progress, mark_step_complete
+from api.grades import patriotism_grade, MISSION_STEPS
 from api.utils import build_verify_url, qr_data_url
 
 STATUS_MESSAGES = [
@@ -273,6 +281,7 @@ class QuizSubmitView(APIView):
                 else mission.match.participant.home_area,
                 match=mission.match,
             )
+            mark_step_complete(participant, 1)
 
         return Response(
             MissionCompleteSerializer(
@@ -318,6 +327,10 @@ class CertificateGenerateView(APIView):
             participant=participant,
             mission=mission,
         )
+        if not MissionStepProgress.objects.filter(participant=participant, step_number=4).exists():
+            participant.patriotism_points += MISSION_STEPS[3]["points"]
+            participant.save(update_fields=["patriotism_points"])
+        mark_step_complete(participant, 4)
         return Response(CertificateSerializer(cert).data, status=status.HTTP_201_CREATED)
 
 
@@ -426,3 +439,100 @@ class ElderAudioView(APIView):
     def get(self, request):
         items = ElderAudio.objects.all()
         return Response(ElderAudioSerializer(items, many=True).data)
+
+
+class TimelineEventsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        return Response(TimelineEventSerializer(TimelineEvent.objects.all(), many=True).data)
+
+
+class MissionProgressView(APIView):
+    def get(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+        return Response(build_mission_progress(participant))
+
+
+class MissionStepCompleteView(APIView):
+    STEP_POINTS = {2: 40, 3: 40, 5: 30}
+
+    def post(self, request, step_number: int):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+        if step_number not in (2, 3, 5):
+            return Response({"detail": "Invalid step."}, status=400)
+
+        progress = build_mission_progress(participant)
+        step_info = next((s for s in progress["steps"] if s["number"] == step_number), None)
+        if not step_info or step_info["status"] == "locked":
+            return Response({"detail": "Complete previous steps first."}, status=400)
+        if step_info["status"] == "completed":
+            return Response(build_mission_progress(participant))
+
+        points = self.STEP_POINTS[step_number]
+        participant.patriotism_points += points
+        participant.save(update_fields=["patriotism_points"])
+        mark_step_complete(participant, step_number)
+        return Response(build_mission_progress(participant))
+
+
+class LeaderboardView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        limit = min(int(request.query_params.get("limit", 10)), 20)
+        leaders = (
+            Participant.objects.filter(is_seed_peer=False)
+            .order_by("-patriotism_points", "created_at")[:limit]
+        )
+        entries = []
+        for i, p in enumerate(leaders, start=1):
+            entries.append(
+                {
+                    "rank": i,
+                    "name": p.name,
+                    "home_area": p.home_area,
+                    "region_label": p.region_label,
+                    "patriotism_points": p.patriotism_points,
+                    "grade": patriotism_grade(p.patriotism_points),
+                }
+            )
+        return Response(LeaderboardEntrySerializer(entries, many=True).data)
+
+
+class ChemshaBongoView(APIView):
+    def post(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+
+        serializer = ChemshaBongoSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        score = serializer.validated_data["score"]
+        total = serializer.validated_data["total"]
+        ratio = score / total if total else 0
+        bonus = int(20 + ratio * 80)
+        airtime = 200 if ratio >= 0.5 else 0
+        if ratio >= 0.8:
+            airtime = 500
+
+        participant.patriotism_points += bonus
+        participant.save(update_fields=["patriotism_points"])
+
+        return Response(
+            ChemshaBongoResultSerializer(
+                {
+                    "bonus_points": bonus,
+                    "airtime_reward_tzs": airtime,
+                    "message": "Hongera! Umechemsha bongo kwa ufanisi!" if ratio >= 0.6 else "Endelea kujifunza!",
+                    "patriotism_points": participant.patriotism_points,
+                    "grade": patriotism_grade(participant.patriotism_points),
+                }
+            ).data
+        )

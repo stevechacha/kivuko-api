@@ -1,6 +1,6 @@
 from django.db.models.signals import post_migrate
 
-from api.models import AcademyArticle, ElderAudio, MapConnection, Participant, QuizQuestion, Region
+from api.models import AcademyArticle, ElderAudio, MapConnection, Participant, QuizQuestion, Region, TimelineEvent
 
 
 def seed_demo_data(sender, **kwargs):
@@ -34,6 +34,27 @@ def seed_demo_data(sender, **kwargs):
                     options=["Julius K. Nyerere", "Abeid Amani Karume", "Ali Hassan Mwinyi"],
                     correct_index=1,
                     sort_order=3,
+                ),
+                QuizQuestion(
+                    external_id="q4",
+                    question="Mji mkuu wa Tanzania ni upi?",
+                    options=["Dar es Salaam", "Dodoma", "Zanzibar"],
+                    correct_index=1,
+                    sort_order=4,
+                ),
+                QuizQuestion(
+                    external_id="q5",
+                    question="Lugha rasmi ya Tanzania ni ipi?",
+                    options=["Kiingereza tu", "Kiswahili", "Kiarabu tu"],
+                    correct_index=1,
+                    sort_order=5,
+                ),
+                QuizQuestion(
+                    external_id="q6",
+                    question="Visiwa vikuu vya Zanzibar ni vipi?",
+                    options=["Unguja na Pemba", "Mafia na Pemba", "Lamu na Unguja"],
+                    correct_index=0,
+                    sort_order=6,
                 ),
             ]
         )
@@ -162,3 +183,57 @@ def seed_demo_data(sender, **kwargs):
             ),
         ]
         Participant.objects.bulk_create(seeds)
+
+    if not TimelineEvent.objects.exists():
+        TimelineEvent.objects.bulk_create(
+            [
+                TimelineEvent(
+                    external_id="t1",
+                    year=1961,
+                    month_label="Desemba",
+                    title="Uhuru wa Tanganyika",
+                    description="Tanganyika ilipata uhuru kutoka kwa utawala wa Uingereza chini ya uongozi wa Mwalimu Julius K. Nyerere.",
+                    sort_order=1,
+                ),
+                TimelineEvent(
+                    external_id="t2",
+                    year=1964,
+                    month_label="Januari",
+                    title="Mapinduzi ya Zanzibar",
+                    description="Mapinduzi yalibadilisha mwelekeo wa kisiasa Visiwani na kuweka msingi wa mazungumzo ya muungano.",
+                    sort_order=2,
+                ),
+                TimelineEvent(
+                    external_id="t3",
+                    year=1964,
+                    month_label="Aprili",
+                    title="Muungano wa 26 Aprili",
+                    description="Tanganyika na Zanzibar ziliunganishwa kuunda Jamhuri ya Muungano wa Tanzania.",
+                    sort_order=3,
+                ),
+                TimelineEvent(
+                    external_id="t4",
+                    year=1964,
+                    month_label="Septemba",
+                    title="Kuzaliwa kwa JWTZ",
+                    description="Jeshi la Ulinzi la Wananchi wa Tanzania liliundwa rasmi, likiunganisha vikosi vya Bara na Visiwani.",
+                    sort_order=4,
+                ),
+                TimelineEvent(
+                    external_id="t5",
+                    year=1977,
+                    month_label="",
+                    title="Chama cha Mapinduzi",
+                    description="CCM ilianzishwa kuendeleza umoja wa kisiasa na maendeleo ya taifa.",
+                    sort_order=5,
+                ),
+                TimelineEvent(
+                    external_id="t6",
+                    year=2026,
+                    month_label="Julai",
+                    title="Kivuko la Muungano Hub",
+                    description="Jukwaa la kidijitali linaunganisha vijana wa Bara na Visiwani kupitia dhamira za pamoja na elimu ya uzalendo.",
+                    sort_order=6,
+                ),
+            ]
+        )

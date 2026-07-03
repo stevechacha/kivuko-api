@@ -168,3 +168,29 @@ class AcademyArticle(models.Model):
 
     class Meta:
         ordering = ["sort_order"]
+
+
+class TimelineEvent(models.Model):
+    external_id = models.CharField(max_length=30, unique=True)
+    year = models.PositiveSmallIntegerField()
+    month_label = models.CharField(max_length=40, blank=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order"]
+
+
+class MissionStepProgress(models.Model):
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="mission_steps",
+    )
+    step_number = models.PositiveSmallIntegerField()
+    completed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [("participant", "step_number")]
+        ordering = ["step_number"]

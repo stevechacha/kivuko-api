@@ -10,12 +10,14 @@ from api.models import (
     Participant,
     QuizQuestion,
     AcademyArticle,
+    TimelineEvent,
 )
 
 
 class ParticipantSerializer(serializers.ModelSerializer):
     region_label = serializers.CharField(read_only=True)
     initials = serializers.CharField(read_only=True)
+    patriotism_grade = serializers.SerializerMethodField()
 
     class Meta:
         model = Participant
@@ -29,10 +31,16 @@ class ParticipantSerializer(serializers.ModelSerializer):
             "region_label",
             "initials",
             "patriotism_points",
+            "patriotism_grade",
             "session_token",
             "created_at",
         ]
         read_only_fields = fields
+
+    def get_patriotism_grade(self, obj):
+        from api.grades import patriotism_grade
+
+        return patriotism_grade(obj.patriotism_points)
 
 
 class RegisterSerializer(serializers.Serializer):
@@ -141,3 +149,33 @@ class AdminDashboardSerializer(serializers.Serializer):
     bara_participants = serializers.IntegerField()
     visiwani_participants = serializers.IntegerField()
     recent_connections = MapConnectionSerializer(many=True)
+
+
+class TimelineEventSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(source="external_id")
+
+    class Meta:
+        model = TimelineEvent
+        fields = ["id", "year", "month_label", "title", "description"]
+
+
+class LeaderboardEntrySerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region_label = serializers.CharField()
+    patriotism_points = serializers.IntegerField()
+    grade = serializers.DictField()
+
+
+class ChemshaBongoSubmitSerializer(serializers.Serializer):
+    score = serializers.IntegerField(min_value=0)
+    total = serializers.IntegerField(min_value=1)
+
+
+class ChemshaBongoResultSerializer(serializers.Serializer):
+    bonus_points = serializers.IntegerField()
+    airtime_reward_tzs = serializers.IntegerField()
+    message = serializers.CharField()
+    patriotism_points = serializers.IntegerField()
+    grade = serializers.DictField()
