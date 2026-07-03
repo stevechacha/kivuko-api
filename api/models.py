@@ -16,6 +16,13 @@ class Participant(models.Model):
     college = models.CharField(max_length=200, blank=True)
     home_area = models.CharField(max_length=120)
     region = models.CharField(max_length=20, choices=Region.choices)
+    institution = models.ForeignKey(
+        "Institution",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="participants",
+    )
     session_token = models.CharField(max_length=64, unique=True, blank=True)
     is_seed_peer = models.BooleanField(default=False)
     patriotism_points = models.PositiveIntegerField(default=0)
@@ -226,6 +233,7 @@ class ContentReport(models.Model):
     )
     reason = models.CharField(max_length=32, choices=Reason.choices)
     excerpt = models.TextField(blank=True)
+    auto_flagged = models.BooleanField(default=False)
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
     action_taken = models.CharField(max_length=16, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -289,6 +297,99 @@ class OralStory(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class Institution(models.Model):
+    """School / college cohort for institution-based matching campaigns."""
+
+    code = models.CharField(max_length=40, unique=True)
+    name = models.CharField(max_length=200)
+    home_area = models.CharField(max_length=120)
+    region = models.CharField(max_length=20, choices=Region.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return f"{self.code} — {self.name}"
+
+
+class ElderStory(models.Model):
+    """Oral history submissions from elder contributors (radio recognition pipeline)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    contributor_name = models.CharField(max_length=200)
+    contributor_phone = models.CharField(max_length=30, blank=True)
+    home_area = models.CharField(max_length=120)
+    region = models.CharField(max_length=20, choices=Region.choices)
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    audio_url = models.URLField(blank=True)
+    video_url = models.URLField(blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
+class ElderRadioNominee(models.Model):
+    """Top 10 Elder Contributors shortlist for national radio segment."""
+
+    story = models.OneToOneField(
+        ElderStory,
+        on_delete=models.CASCADE,
+        related_name="radio_nomination",
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-added_at"]
+
+
+class RewardDisbursement(models.Model):
+    """Airtime / M-Pesa micro-reward ledger (sandbox until telco integration)."""
+
+    class RewardType(models.TextChoices):
+        AIRTIME = "airtime", "Airtime voucher"
+        MPESA = "mpesa", "M-Pesa"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        PROCESSING = "processing", "Processing"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="rewards",
+    )
+    amount_tzs = models.PositiveIntegerField()
+    reward_type = models.CharField(max_length=16, choices=RewardType.choices, default=RewardType.AIRTIME)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    source = models.CharField(max_length=120, blank=True)
+    mission = models.ForeignKey(
+        Mission,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="rewards",
+    )
+    reference = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at"]

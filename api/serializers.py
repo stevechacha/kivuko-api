@@ -49,6 +49,7 @@ class RegisterSerializer(serializers.Serializer):
     college = serializers.CharField(max_length=200, required=False, allow_blank=True)
     home_area = serializers.CharField(max_length=120)
     region = serializers.ChoiceField(choices=["bara", "visiwani"])
+    institution_code = serializers.CharField(max_length=40, required=False, allow_blank=True)
     accepted_terms = serializers.BooleanField()
 
 
@@ -69,6 +70,7 @@ class ReportedItemSerializer(serializers.Serializer):
     excerpt = serializers.CharField(allow_blank=True)
     reported_at_label = serializers.CharField()
     status = serializers.ChoiceField(choices=["pending", "resolved"])
+    auto_flagged = serializers.BooleanField(required=False, default=False)
 
 
 class ReportResolveSerializer(serializers.Serializer):
@@ -206,6 +208,8 @@ class AdminDashboardSerializer(serializers.Serializer):
     gala_nominees = serializers.IntegerField()
     quiz_questions = serializers.IntegerField()
     platform_ready = serializers.BooleanField()
+    pending_elders = serializers.IntegerField(required=False, default=0)
+    pending_rewards = serializers.IntegerField(required=False, default=0)
 
 
 class PlatformStatusSerializer(serializers.Serializer):
@@ -289,5 +293,127 @@ class OralStorySerializer(serializers.Serializer):
 
 class OralStoryResolveSerializer(serializers.Serializer):
     action = serializers.ChoiceField(choices=["approve", "reject"])
+    patriotism_points = serializers.IntegerField(required=False)
+    grade = serializers.DictField(required=False)
+
+
+class InstitutionSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region = serializers.CharField()
+
+
+class ElderStorySubmitSerializer(serializers.Serializer):
+    title = serializers.CharField(max_length=200)
+    body = serializers.CharField(max_length=5000)
+    contributor_name = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    contributor_phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    home_area = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    region = serializers.ChoiceField(choices=["bara", "visiwani"], required=False)
+    audio_url = serializers.URLField(required=False, allow_blank=True)
+    video_url = serializers.URLField(required=False, allow_blank=True)
+
+
+class ElderStorySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    contributor_name = serializers.CharField()
+    title = serializers.CharField()
+    body = serializers.CharField()
+    home_area = serializers.CharField()
+    region = serializers.CharField()
+    region_label = serializers.CharField()
+    audio_url = serializers.CharField(allow_blank=True)
+    video_url = serializers.CharField(allow_blank=True)
+    status = serializers.CharField()
+    radio_nominated = serializers.BooleanField()
+    created_at_label = serializers.CharField()
+
+
+class ElderStoryResolveSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["approve", "reject"])
+
+
+class ElderRadioEntrySerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    story_id = serializers.UUIDField()
+    contributor_name = serializers.CharField()
+    title = serializers.CharField()
+    home_area = serializers.CharField()
+    region_label = serializers.CharField()
+    audio_url = serializers.CharField(allow_blank=True)
+
+
+class PartnerInstitutionSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region = serializers.CharField()
+    youth_count = serializers.IntegerField()
+
+
+class PartnerDashboardSerializer(serializers.Serializer):
+    youth_registered = serializers.IntegerField()
+    pairs_today = serializers.IntegerField()
+    certificates_issued = serializers.IntegerField()
+    completed_missions = serializers.IntegerField()
+    bara_youth = serializers.IntegerField()
+    visiwani_youth = serializers.IntegerField()
+    regions_active = serializers.IntegerField()
+    institutions = PartnerInstitutionSerializer(many=True)
+    pending_elder_stories = serializers.IntegerField()
+    rewards_pending_tzs = serializers.IntegerField()
+
+
+class RadioYouthNomineeSerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region_label = serializers.CharField()
+    patriotism_points = serializers.IntegerField()
+
+
+class RadioPartnerSerializer(serializers.Serializer):
+    station_name = serializers.CharField()
+    segment_title = serializers.CharField()
+    elder_nominees = ElderRadioEntrySerializer(many=True)
+    youth_gala_nominees = RadioYouthNomineeSerializer(many=True)
+    approved_elder_stories = serializers.IntegerField()
+    broadcast_ready = serializers.BooleanField()
+
+
+class GalaCeremonyYouthSerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region_label = serializers.CharField()
     patriotism_points = serializers.IntegerField()
     grade = serializers.DictField()
+    gala_nominated = serializers.BooleanField()
+
+
+class GalaCeremonySerializer(serializers.Serializer):
+    event_title = serializers.CharField()
+    live_mode = serializers.BooleanField()
+    youth_finalists = GalaCeremonyYouthSerializer(many=True)
+    elder_finalists = ElderRadioEntrySerializer(many=True)
+    total_certificates = serializers.IntegerField()
+    total_connections = serializers.IntegerField()
+    average_patriotism_score = serializers.IntegerField()
+    ceremony_message = serializers.CharField()
+
+
+class RewardDisbursementSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    participant_name = serializers.CharField()
+    participant_phone = serializers.CharField()
+    amount_tzs = serializers.IntegerField()
+    reward_type = serializers.CharField()
+    status = serializers.CharField()
+    source = serializers.CharField()
+    reference = serializers.CharField(allow_blank=True)
+    created_at_label = serializers.CharField()
+
+
+class RewardDisburseSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["send", "processing", "fail"])

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "channels",
     "corsheaders",
     "rest_framework",
     "api",
@@ -79,6 +80,13 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "kivuko.wsgi.application"
+ASGI_APPLICATION = "kivuko.asgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
 
 DATABASES = {
     "default": dj_database_url.config(
@@ -153,3 +161,4 @@ PUBLIC_APP_BASE_URL = os.environ.get(
 )
 
 ADMIN_DASHBOARD_KEY = os.environ.get("ADMIN_DASHBOARD_KEY", "")
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "MUUNGANO2026")

@@ -3,4 +3,4 @@ set -e
 
 python manage.py migrate --noinput
 python manage.py sync_quiz
-exec gunicorn kivuko.wsgi --bind "0.0.0.0:${PORT:-8000}" --workers 2 --timeout 120
+exec uvicorn kivuko.asgi:application --host "0.0.0.0" --port "${PORT:-8000}"

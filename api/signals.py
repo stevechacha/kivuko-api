@@ -5,6 +5,7 @@ from api.models import (
     ChatMessage,
     ContentReport,
     ElderAudio,
+    Institution,
     Match,
     Mission,
     Participant,
@@ -167,6 +168,20 @@ def seed_demo_data(sender, **kwargs):
 
     _seed_demo_peers()
     _seed_demo_moderation_queue()
+    _seed_institutions()
+
+
+INSTITUTION_SEEDS = [
+    {"code": "UDSM2026", "name": "University of Dar es Salaam", "home_area": "Dar es Salaam", "region": Region.BARA},
+    {"code": "SUZA2026", "name": "State University of Zanzibar", "home_area": "Unguja", "region": Region.VISIWANI},
+    {"code": "MZUMBE26", "name": "Mzumbe University", "home_area": "Morogoro", "region": Region.BARA},
+    {"code": "KCMUCO26", "name": "KCMUCo", "home_area": "Pemba", "region": Region.VISIWANI},
+]
+
+
+def _seed_institutions() -> None:
+    for item in INSTITUTION_SEEDS:
+        Institution.objects.update_or_create(code=item["code"], defaults=item)
 
 
 def _seed_demo_peers() -> None:

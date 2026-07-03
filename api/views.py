@@ -14,6 +14,7 @@ from api.models import (
     ChatMessage,
     ContentReport,
     ElderAudio,
+    Institution,
     MapConnection,
     Match,
     Mission,
@@ -21,6 +22,8 @@ from api.models import (
     OralStory,
     Participant,
     GalaNominee,
+    ElderStory,
+    RewardDisbursement,
     QuizQuestion,
     QuizSubmission,
     Region,
@@ -60,6 +63,9 @@ from api.serializers import (
 from api.progress import build_mission_progress, mark_step_complete
 from api.grades import patriotism_grade, MISSION_STEPS
 from api.utils import build_verify_url, qr_data_url
+from api.keyword_flags import detect_violation
+from api.rewards import grant_reward
+from api.chat_broadcast import broadcast_chat_message
 
 
 def _normalize_phone(phone: str) -> str:
@@ -132,14 +138,17 @@ def _opposite_region(region: str) -> str:
 
 def _find_peer(participant: Participant) -> Participant | None:
     opposite = _opposite_region(participant.region)
-    waiting = (
+    base_qs = (
         Participant.objects.filter(region=opposite, is_seed_peer=False)
         .exclude(id=participant.id)
         .exclude(matches_as_participant__status="active")
         .exclude(matches_as_peer__status="active")
-        .first()
     )
-    return waiting
+    if participant.institution_id:
+        cohort = base_qs.filter(institution_id=participant.institution_id).first()
+        if cohort:
+            return cohort
+    return base_qs.first()
 
 
 def _find_seed_peer(participant: Participant) -> Participant | None:
@@ -209,6 +218,12 @@ class RegisterView(APIView):
             home_area=data["home_area"],
             region=data["region"],
         )
+        institution_code = (data.get("institution_code") or "").strip().upper()
+        if institution_code:
+            institution = Institution.objects.filter(code=institution_code).first()
+            if institution:
+                participant.institution = institution
+                participant.save(update_fields=["institution"])
         return Response(
             SessionSerializer(_session_payload(participant, "Karibu, Mzalendo!")).data,
             status=status.HTTP_201_CREATED,
@@ -331,6 +346,18 @@ class MissionChatView(APIView):
             text=text,
         )
         peer = _mission_peer(mission, participant)
+
+        flagged, reason = detect_violation(text)
+        if flagged and reason:
+            ContentReport.objects.create(
+                mission=mission,
+                reporter=participant,
+                reported=peer,
+                reason=reason,
+                excerpt=text[:280],
+                auto_flagged=True,
+            )
+
         if peer.is_seed_peer:
             delay_seconds = random.uniform(1.4, 3.2)
             ChatMessage.objects.create(
@@ -340,6 +367,15 @@ class MissionChatView(APIView):
                 text=_peer_reply_text(text),
                 deliver_at=timezone.now() + timedelta(seconds=delay_seconds),
             )
+        broadcast_chat_message(
+            mission.id,
+            {
+                "id": str(mine.id),
+                "from_role": mine.from_role,
+                "text": mine.text,
+                "created_at": mine.created_at.isoformat(),
+            },
+        )
         return Response(
             {"sent": ChatMessageSerializer(mine).data},
             status=status.HTTP_201_CREATED,
@@ -394,6 +430,14 @@ class QuizSubmitView(APIView):
                 match=mission.match,
             )
             mark_step_complete(participant, 1)
+            if completed:
+                grant_reward(
+                    participant,
+                    500,
+                    RewardDisbursement.RewardType.AIRTIME,
+                    source="mission_complete",
+                    mission_id=mission.id,
+                )
 
         return Response(
             MissionCompleteSerializer(
@@ -599,6 +643,12 @@ class AdminDashboardView(APIView):
                     "gala_nominees": GalaNominee.objects.count(),
                     "quiz_questions": quiz_count,
                     "platform_ready": seed_ready and quiz_count >= 3,
+                    "pending_elders": ElderStory.objects.filter(
+                        status=ElderStory.Status.PENDING
+                    ).count(),
+                    "pending_rewards": RewardDisbursement.objects.filter(
+                        status=RewardDisbursement.Status.PENDING
+                    ).count(),
                 }
             ).data
         )
@@ -752,6 +802,13 @@ class ChemshaBongoView(APIView):
 
         participant.patriotism_points += bonus
         participant.save(update_fields=["patriotism_points"])
+        if airtime:
+            grant_reward(
+                participant,
+                airtime,
+                RewardDisbursement.RewardType.AIRTIME,
+                source="chemsha_bongo",
+            )
 
         return Response(
             ChemshaBongoResultSerializer(
@@ -815,6 +872,7 @@ def _serialize_report(report: ContentReport) -> dict:
         "excerpt": report.excerpt,
         "reported_at_label": _report_time_label(report.created_at),
         "status": report.status,
+        "auto_flagged": report.auto_flagged,
     }
 
 
