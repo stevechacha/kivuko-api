@@ -177,6 +177,24 @@ class AdminDashboardSerializer(serializers.Serializer):
     recent_connections = MapConnectionSerializer(many=True)
 
 
+class LiveActivitySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    icon = serializers.CharField()
+    text = serializers.CharField()
+    subtitle = serializers.CharField(required=False)
+
+
+class LiveImpactSerializer(serializers.Serializer):
+    youth_connected = serializers.IntegerField()
+    pairs_today = serializers.IntegerField()
+    certificates_issued = serializers.IntegerField()
+    regions_active = serializers.IntegerField()
+    live_connections = serializers.IntegerField()
+    bara_youth = serializers.IntegerField()
+    visiwani_youth = serializers.IntegerField()
+    activity = LiveActivitySerializer(many=True)
+
+
 class TimelineEventSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="external_id")
 

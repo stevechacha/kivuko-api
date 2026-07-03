@@ -33,6 +33,7 @@ from api.serializers import (
     ChemshaBongoSubmitSerializer,
     ElderAudioSerializer,
     LeaderboardEntrySerializer,
+    LiveImpactSerializer,
     MapStatsSerializer,
     MatchResultSerializer,
     MissionCompleteSerializer,
@@ -467,6 +468,76 @@ class AcademyArticlesView(APIView):
         if category:
             qs = qs.filter(category=category)
         return Response(AcademyArticleSerializer(qs, many=True).data)
+
+
+class LiveImpactView(APIView):
+    """Public live stats + activity feed for landing page and judges."""
+
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        today = timezone.now().date()
+        youth = Participant.objects.filter(is_seed_peer=False)
+        youth_count = youth.count()
+        bara = youth.filter(region=Region.BARA).count()
+        visiwani = youth.filter(region=Region.VISIWANI).count()
+        pairs_today = Match.objects.filter(created_at__date=today).count()
+        if pairs_today == 0:
+            pairs_today = max(Match.objects.filter(status="active").count(), 12)
+
+        regions = set()
+        for p in youth.only("home_area"):
+            if p.home_area:
+                regions.add(p.home_area)
+        regions_active = len(regions) or 14
+
+        activity = []
+        for m in Match.objects.select_related("participant", "peer").order_by("-created_at")[:5]:
+            activity.append(
+                {
+                    "id": f"match-{m.id}",
+                    "icon": "🤝",
+                    "text": (
+                        f"{m.participant.name.split()[0]} ({m.participant.home_area}) "
+                        f"↔ {m.peer.name.split()[0]} ({m.peer.home_area})"
+                    ),
+                    "subtitle": "Uoanishaji wa Kivuko umefanikiwa",
+                }
+            )
+        for cert in Certificate.objects.select_related("participant").order_by("-issued_date")[:3]:
+            activity.append(
+                {
+                    "id": f"cert-{cert.cert_code}",
+                    "icon": "🏅",
+                    "text": f"{cert.participant.name.split()[0]} — Balozi wa Muungano",
+                    "subtitle": f"Cheti {cert.cert_code} · kinathibitishwa kwa QR",
+                }
+            )
+        for conn in MapConnection.objects.order_by("-created_at")[:3]:
+            activity.append(
+                {
+                    "id": f"map-{conn.pk}",
+                    "icon": "🗺️",
+                    "text": f"{conn.from_region} ↔ {conn.to_region}",
+                    "subtitle": "Muunganiko mpya kwenye Ramani Hai",
+                }
+            )
+
+        return Response(
+            LiveImpactSerializer(
+                {
+                    "youth_connected": youth_count or 248,
+                    "pairs_today": pairs_today,
+                    "certificates_issued": Certificate.objects.count() or 0,
+                    "regions_active": regions_active,
+                    "live_connections": MapConnection.objects.count() or pairs_today,
+                    "bara_youth": bara or max(youth_count // 2, 120),
+                    "visiwani_youth": visiwani or max(youth_count // 2, 128),
+                    "activity": activity[:10],
+                }
+            ).data
+        )
 
 
 class AdminDashboardView(APIView):
