@@ -1,6 +1,16 @@
 from django.db.models.signals import post_migrate
 
-from api.models import AcademyArticle, ElderAudio, TimelineEvent
+from api.models import (
+    AcademyArticle,
+    ChatMessage,
+    ContentReport,
+    ElderAudio,
+    Match,
+    Mission,
+    Participant,
+    Region,
+    TimelineEvent,
+)
 from api.quiz_sync import sync_quiz_questions
 
 # Public-domain / Wikimedia audio clips for the elder archive.
@@ -154,3 +164,74 @@ def seed_demo_data(sender, **kwargs):
                 ),
             ]
         )
+
+    _seed_demo_peers()
+    _seed_demo_moderation_queue()
+
+
+def _seed_demo_peers() -> None:
+    import secrets
+
+    seeds = [
+        {
+            "name": "Khadija Mrisho",
+            "phone": "0755 200 001",
+            "college": "Chuo cha Zanzibar",
+            "home_area": "Unguja",
+            "region": Region.VISIWANI,
+        },
+        {
+            "name": "Suleiman Faki",
+            "phone": "0755 200 002",
+            "college": "SUZA",
+            "home_area": "Pemba",
+            "region": Region.VISIWANI,
+        },
+        {
+            "name": "Furaha Ndosi",
+            "phone": "0755 200 003",
+            "college": "UDSM",
+            "home_area": "Mwanza",
+            "region": Region.BARA,
+        },
+    ]
+    for data in seeds:
+        peer, created = Participant.objects.get_or_create(
+            phone=data["phone"],
+            defaults={**data, "is_seed_peer": True, "session_token": secrets.token_urlsafe(32)},
+        )
+        if not created and not peer.is_seed_peer:
+            peer.is_seed_peer = True
+            peer.save(update_fields=["is_seed_peer"])
+
+
+def _seed_demo_moderation_queue() -> None:
+    if ContentReport.objects.filter(status=ContentReport.Status.PENDING).exists():
+        return
+
+    bara = Participant.objects.filter(is_seed_peer=True, region=Region.BARA).first()
+    visi = Participant.objects.filter(is_seed_peer=True, region=Region.VISIWANI).first()
+    if not bara or not visi:
+        return
+
+    match = Match.objects.filter(participant=bara, peer=visi).first()
+    if not match:
+        match = Match.objects.create(participant=bara, peer=visi, status="active")
+    mission, _ = Mission.objects.get_or_create(match=match)
+
+    excerpt = "Naweza kukupa namba yangu ya simu kwenye WhatsApp?"
+    if not mission.messages.filter(from_role="peer").exists():
+        ChatMessage.objects.create(
+            mission=mission,
+            sender=visi,
+            from_role="peer",
+            text=excerpt,
+        )
+
+    ContentReport.objects.create(
+        mission=mission,
+        reporter=bara,
+        reported=visi,
+        reason=ContentReport.Reason.CONTACT,
+        excerpt=excerpt,
+    )

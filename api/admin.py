@@ -16,6 +16,7 @@ from api.models import (
     TimelineEvent,
     WhatsAppSession,
     OralStory,
+    GalaNominee,
 )
 
 
@@ -86,6 +87,11 @@ class TimelineEventAdmin(admin.ModelAdmin):
 @admin.register(MissionStepProgress)
 class MissionStepProgressAdmin(admin.ModelAdmin):
     list_display = ("participant", "step_number", "completed_at")
+
+
+@admin.register(GalaNominee)
+class GalaNomineeAdmin(admin.ModelAdmin):
+    list_display = ("participant", "added_at")
 
 
 @admin.register(OralStory)

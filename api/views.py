@@ -1,3 +1,6 @@
+from datetime import timedelta
+import random
+
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -17,6 +20,7 @@ from api.models import (
     MissionStepProgress,
     OralStory,
     Participant,
+    GalaNominee,
     QuizQuestion,
     QuizSubmission,
     Region,
@@ -39,6 +43,8 @@ from api.serializers import (
     OralStoryResolveSerializer,
     OralStorySerializer,
     OralStorySubmitSerializer,
+    PlatformStatusSerializer,
+    GalaToggleSerializer,
     ParticipantSerializer,
     QuizQuestionSerializer,
     QuizSubmitSerializer,
@@ -91,6 +97,24 @@ STATUS_MESSAGES = [
     "Inathibitisha muunganiko wa kivuko…",
 ]
 
+PEER_REPLIES = [
+    "Vizuri sana! 🙌",
+    "Nakubaliana nawe.",
+    "Hii ni sehemu yangu pendwa ya historia yetu!",
+    "Sawa kabisa — tuendelee pamoja.",
+]
+
+
+def _peer_reply_text(user_text: str) -> str:
+    lowered = user_text.lower()
+    if any(w in lowered for w in ("1964", "muungano", "union", "aprili")):
+        return "Ndio! 26 Aprili 1964 — siku muhimu kwa taifa letu. 🇹🇿"
+    if any(w in lowered for w in ("habari", "mambo", "salamu", "hello")):
+        return "Marahaba! Niko tayari kwa dhamira yetu ya pamoja 😊"
+    if "?" in user_text:
+        return "Swali zuri! Hebu tujaribu kujibu pamoja kwenye jaribio. 📝"
+    return random.choice(PEER_REPLIES)
+
 
 def _mission_peer(mission: Mission, participant: Participant) -> Participant:
     match = mission.match
@@ -118,6 +142,21 @@ def _find_peer(participant: Participant) -> Participant | None:
     return waiting
 
 
+def _find_seed_peer(participant: Participant) -> Participant | None:
+    opposite = _opposite_region(participant.region)
+    return Participant.objects.filter(region=opposite, is_seed_peer=True).first()
+
+
+def _match_result_payload(match, mission, peer) -> dict:
+    return {
+        "match_id": match.id,
+        "mission_id": mission.id,
+        "peer": peer,
+        "status_messages": STATUS_MESSAGES,
+        "demo_twin": peer.is_seed_peer,
+    }
+
+
 def _seed_chat(mission: Mission, participant: Participant, peer: Participant) -> None:
     if mission.messages.exists():
         return
@@ -126,6 +165,13 @@ def _seed_chat(mission: Mission, participant: Participant, peer: Participant) ->
         from_role="system",
         text=f"Umeunganishwa na {peer.name.split()[0]} — {peer.region_label} 🌊",
     )
+    if peer.is_seed_peer and not mission.messages.filter(from_role="peer").exists():
+        ChatMessage.objects.create(
+            mission=mission,
+            sender=peer,
+            from_role="peer",
+            text="Habari! Niko tayari kwa Dhamira ya leo 😊",
+        )
 
 
 class RegisterView(APIView):
@@ -216,25 +262,19 @@ class MatchView(APIView):
         if existing:
             mission = existing.mission
             _seed_chat(mission, participant, existing.peer)
-            return Response(
-                MatchResultSerializer(
-                    {
-                        "match_id": existing.id,
-                        "mission_id": mission.id,
-                        "peer": existing.peer,
-                        "status_messages": STATUS_MESSAGES,
-                    }
-                ).data
-            )
+            return Response(MatchResultSerializer(_match_result_payload(existing, mission, existing.peer)).data)
 
+        demo_match = bool(request.data.get("demo_match"))
         with transaction.atomic():
             peer = _find_peer(participant)
+            if not peer and demo_match:
+                peer = _find_seed_peer(participant)
             if not peer:
                 return Response(
                     {
                         "detail": (
                             "Hakuna mwenza wa kusubiri kutoka mkoa wa pili. "
-                            "Mwalike rafiki au jaribu tena baada ya muda mfupi."
+                            "Mwalike rafiki au tumia Mwenza wa Demo."
                         ),
                         "waiting": True,
                     },
@@ -245,14 +285,7 @@ class MatchView(APIView):
             _seed_chat(mission, participant, peer)
 
         return Response(
-            MatchResultSerializer(
-                {
-                    "match_id": match.id,
-                    "mission_id": mission.id,
-                    "peer": peer,
-                    "status_messages": STATUS_MESSAGES,
-                }
-            ).data,
+            MatchResultSerializer(_match_result_payload(match, mission, peer)).data,
             status=status.HTTP_201_CREATED,
         )
 
@@ -297,6 +330,16 @@ class MissionChatView(APIView):
             from_role="me",
             text=text,
         )
+        peer = _mission_peer(mission, participant)
+        if peer.is_seed_peer:
+            delay_seconds = random.uniform(1.4, 3.2)
+            ChatMessage.objects.create(
+                mission=mission,
+                sender=peer,
+                from_role="peer",
+                text=_peer_reply_text(text),
+                deliver_at=timezone.now() + timedelta(seconds=delay_seconds),
+            )
         return Response(
             {"sent": ChatMessageSerializer(mine).data},
             status=status.HTTP_201_CREATED,
@@ -528,6 +571,8 @@ class AdminDashboardView(APIView):
         )
         bara = next((r["count"] for r in region_counts if r["region"] == Region.BARA), 0)
         visiwani = next((r["count"] for r in region_counts if r["region"] == Region.VISIWANI), 0)
+        quiz_count = QuizQuestion.objects.count()
+        seed_ready = Participant.objects.filter(is_seed_peer=True).count() >= 2
 
         return Response(
             AdminDashboardSerializer(
@@ -542,6 +587,48 @@ class AdminDashboardView(APIView):
                     "bara_participants": bara,
                     "visiwani_participants": visiwani,
                     "recent_connections": connections,
+                    "pending_reports": ContentReport.objects.filter(
+                        status=ContentReport.Status.PENDING
+                    ).count(),
+                    "pending_stories": OralStory.objects.filter(
+                        status=OralStory.Status.PENDING
+                    ).count(),
+                    "signups_today": Participant.objects.filter(
+                        is_seed_peer=False, created_at__date=today
+                    ).count(),
+                    "gala_nominees": GalaNominee.objects.count(),
+                    "quiz_questions": quiz_count,
+                    "platform_ready": seed_ready and quiz_count >= 3,
+                }
+            ).data
+        )
+
+
+class PlatformStatusView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        youth = Participant.objects.filter(is_seed_peer=False).count()
+        seed_ready = Participant.objects.filter(is_seed_peer=True).count() >= 2
+        quiz_count = QuizQuestion.objects.count()
+        pending = ContentReport.objects.filter(status=ContentReport.Status.PENDING).count()
+        demo_ready = seed_ready and quiz_count >= 3
+        msg = (
+            "Jukwaa liko tayari kwa onyesho la waamuzi."
+            if demo_ready
+            else "Inasawazisha maudhui ya demo — jaribu tena baada ya sekunde chache."
+        )
+        return Response(
+            PlatformStatusSerializer(
+                {
+                    "api_online": True,
+                    "youth_registered": youth,
+                    "seed_peers_ready": seed_ready,
+                    "quiz_questions": quiz_count,
+                    "pending_reports": pending,
+                    "demo_ready": demo_ready,
+                    "message": msg,
                 }
             ).data
         )
@@ -624,22 +711,26 @@ class LeaderboardView(APIView):
     def get(self, request):
         limit = min(int(request.query_params.get("limit", 10)), 20)
         region = request.query_params.get("region")
+        include_gala = request.query_params.get("include_gala") == "1"
         qs = Participant.objects.filter(is_seed_peer=False)
         if region in (Region.BARA, Region.VISIWANI):
             qs = qs.filter(region=region)
         leaders = qs.order_by("-patriotism_points", "created_at")[:limit]
+        nominee_ids = set(GalaNominee.objects.values_list("participant_id", flat=True))
         entries = []
         for i, p in enumerate(leaders, start=1):
-            entries.append(
-                {
-                    "rank": i,
-                    "name": p.name,
-                    "home_area": p.home_area,
-                    "region_label": p.region_label,
-                    "patriotism_points": p.patriotism_points,
-                    "grade": patriotism_grade(p.patriotism_points),
-                }
-            )
+            entry = {
+                "rank": i,
+                "name": p.name,
+                "home_area": p.home_area,
+                "region_label": p.region_label,
+                "patriotism_points": p.patriotism_points,
+                "grade": patriotism_grade(p.patriotism_points),
+            }
+            if include_gala:
+                entry["participant_id"] = p.id
+                entry["gala_nominated"] = p.id in nominee_ids
+            entries.append(entry)
         return Response(LeaderboardEntrySerializer(entries, many=True).data)
 
 
@@ -766,6 +857,9 @@ class AdminReportsView(APIView):
     permission_classes = []
 
     def get(self, request):
+        denied = _require_admin_key(request)
+        if denied:
+            return denied
         status_filter = request.query_params.get("status", "pending")
         if status_filter not in ("pending", "resolved"):
             status_filter = "pending"
@@ -782,6 +876,9 @@ class AdminReportResolveView(APIView):
     permission_classes = []
 
     def post(self, request, report_id):
+        denied = _require_admin_key(request)
+        if denied:
+            return denied
         serializer = ReportResolveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         action = serializer.validated_data["action"]
@@ -882,6 +979,30 @@ class AdminStoryResolveView(APIView):
         story.reviewed_at = timezone.now()
         story.save(update_fields=["status", "reviewed_at"])
         return Response(OralStorySerializer(_serialize_story(story)).data)
+
+
+class AdminGalaToggleView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, participant_id):
+        denied = _require_admin_key(request)
+        if denied:
+            return denied
+        serializer = GalaToggleSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        nominated = serializer.validated_data["nominated"]
+        try:
+            participant = Participant.objects.get(id=participant_id, is_seed_peer=False)
+        except Participant.DoesNotExist:
+            return Response({"detail": "Participant not found."}, status=404)
+
+        if nominated:
+            GalaNominee.objects.get_or_create(participant=participant)
+        else:
+            GalaNominee.objects.filter(participant=participant).delete()
+
+        return Response({"participant_id": participant.id, "nominated": nominated})
 
 
 class UssdBotView(APIView):

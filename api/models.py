@@ -251,6 +251,20 @@ class WhatsAppSession(models.Model):
         return f"WA {self.session_key[:8]}… ({self.points} pts)"
 
 
+class GalaNominee(models.Model):
+    """Admin-curated Top 10 shortlist for the annual Uzalendo Gala."""
+
+    participant = models.OneToOneField(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="gala_nomination",
+    )
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-added_at"]
+
+
 class OralStory(models.Model):
     """Culture-mission oral history submissions awaiting moderator review."""
 

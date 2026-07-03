@@ -91,6 +91,7 @@ class MatchResultSerializer(serializers.Serializer):
     mission_id = serializers.UUIDField()
     peer = ParticipantSerializer()
     status_messages = serializers.ListField(child=serializers.CharField())
+    demo_twin = serializers.BooleanField(required=False, default=False)
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
@@ -199,6 +200,26 @@ class AdminDashboardSerializer(serializers.Serializer):
     bara_participants = serializers.IntegerField()
     visiwani_participants = serializers.IntegerField()
     recent_connections = MapConnectionSerializer(many=True)
+    pending_reports = serializers.IntegerField()
+    pending_stories = serializers.IntegerField()
+    signups_today = serializers.IntegerField()
+    gala_nominees = serializers.IntegerField()
+    quiz_questions = serializers.IntegerField()
+    platform_ready = serializers.BooleanField()
+
+
+class PlatformStatusSerializer(serializers.Serializer):
+    api_online = serializers.BooleanField()
+    youth_registered = serializers.IntegerField()
+    seed_peers_ready = serializers.BooleanField()
+    quiz_questions = serializers.IntegerField()
+    pending_reports = serializers.IntegerField()
+    demo_ready = serializers.BooleanField()
+    message = serializers.CharField()
+
+
+class GalaToggleSerializer(serializers.Serializer):
+    nominated = serializers.BooleanField()
 
 
 class LiveActivitySerializer(serializers.Serializer):
@@ -229,11 +250,13 @@ class TimelineEventSerializer(serializers.ModelSerializer):
 
 class LeaderboardEntrySerializer(serializers.Serializer):
     rank = serializers.IntegerField()
+    participant_id = serializers.UUIDField(required=False)
     name = serializers.CharField()
     home_area = serializers.CharField()
     region_label = serializers.CharField()
     patriotism_points = serializers.IntegerField()
     grade = serializers.DictField()
+    gala_nominated = serializers.BooleanField(required=False, default=False)
 
 
 class ChemshaBongoSubmitSerializer(serializers.Serializer):
