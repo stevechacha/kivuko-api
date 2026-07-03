@@ -1,7 +1,35 @@
 from django.db.models.signals import post_migrate
 
-from api.models import AcademyArticle, ElderAudio, MapConnection, Participant, Region, TimelineEvent
+from api.models import AcademyArticle, ElderAudio, TimelineEvent
 from api.quiz_sync import sync_quiz_questions
+
+# Public-domain / Wikimedia audio clips for the elder archive.
+ELDER_AUDIO_SEEDS = [
+    {
+        "external_id": "a0",
+        "name": "Mwalimu Julius K. Nyerere",
+        "area": "Taifa",
+        "duration_label": "Wimbo wa Taifa · Tanzania",
+        "audio_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/National_Anthem_of_Tanzania.ogg",
+        "sort_order": 0,
+    },
+    {
+        "external_id": "a1",
+        "name": "Bibi Fatuma",
+        "area": "Pemba",
+        "duration_label": "Sekunde 30 · 1964 ilivyokuwa",
+        "audio_url": "https://upload.wikimedia.org/wikipedia/commons/1/1a/Tanzania_national_anthem_instrumental.ogg",
+        "sort_order": 1,
+    },
+    {
+        "external_id": "a2",
+        "name": "Babu Elias",
+        "area": "Kigoma",
+        "duration_label": "Sekunde 30 · Siku ya Muungano",
+        "audio_url": "https://upload.wikimedia.org/wikipedia/commons/3/3f/National_Anthem_of_Tanzania.ogg",
+        "sort_order": 2,
+    },
+]
 
 
 def seed_demo_data(sender, **kwargs):
@@ -10,28 +38,10 @@ def seed_demo_data(sender, **kwargs):
 
     sync_quiz_questions()
 
-    if not ElderAudio.objects.exists():
-        ElderAudio.objects.bulk_create(
-            [
-                ElderAudio(
-                    external_id="a0",
-                    name="Mwalimu Julius K. Nyerere",
-                    area="Taifa",
-                    duration_label="Sekunde 10 · Umoja na Muungano",
-                ),
-                ElderAudio(
-                    external_id="a1",
-                    name="Bibi Fatuma",
-                    area="Pemba",
-                    duration_label="Sekunde 30 · 1964 ilivyokuwa",
-                ),
-                ElderAudio(
-                    external_id="a2",
-                    name="Babu Elias",
-                    area="Kigoma",
-                    duration_label="Sekunde 30 · Siku ya Muungano",
-                ),
-            ]
+    for item in ELDER_AUDIO_SEEDS:
+        ElderAudio.objects.update_or_create(
+            external_id=item["external_id"],
+            defaults=item,
         )
 
     if not AcademyArticle.objects.exists():
@@ -90,50 +100,6 @@ def seed_demo_data(sender, **kwargs):
                 ),
             ]
         )
-
-    if not MapConnection.objects.exists():
-        MapConnection.objects.bulk_create(
-            [
-                MapConnection(from_region="Mwanza", to_region="Unguja"),
-                MapConnection(from_region="Dodoma", to_region="Pemba"),
-                MapConnection(from_region="Mbeya", to_region="Unguja"),
-                MapConnection(from_region="Dar es Salaam", to_region="Pemba"),
-            ]
-        )
-
-    if not Participant.objects.filter(is_seed_peer=True).exists():
-        import secrets
-
-        seeds = [
-            Participant(
-                name="Khadija Mrisho",
-                phone="0755 200 001",
-                college="Chuo cha Zanzibar",
-                home_area="Unguja",
-                region=Region.VISIWANI,
-                is_seed_peer=True,
-                session_token=secrets.token_urlsafe(32),
-            ),
-            Participant(
-                name="Suleiman Faki",
-                phone="0755 200 002",
-                college="SUZA",
-                home_area="Pemba",
-                region=Region.VISIWANI,
-                is_seed_peer=True,
-                session_token=secrets.token_urlsafe(32),
-            ),
-            Participant(
-                name="Furaha Ndosi",
-                phone="0755 200 003",
-                college="UDSM",
-                home_area="Mwanza",
-                region=Region.BARA,
-                is_seed_peer=True,
-                session_token=secrets.token_urlsafe(32),
-            ),
-        ]
-        Participant.objects.bulk_create(seeds)
 
     if not TimelineEvent.objects.exists():
         TimelineEvent.objects.bulk_create(

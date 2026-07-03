@@ -1,6 +1,3 @@
-from datetime import timedelta
-import random
-
 from django.db import transaction
 from django.db.models import Count, Q
 from django.utils import timezone
@@ -18,6 +15,7 @@ from api.models import (
     Match,
     Mission,
     MissionStepProgress,
+    OralStory,
     Participant,
     QuizQuestion,
     QuizSubmission,
@@ -38,6 +36,9 @@ from api.serializers import (
     MapStatsSerializer,
     MatchResultSerializer,
     MissionCompleteSerializer,
+    OralStoryResolveSerializer,
+    OralStorySerializer,
+    OralStorySubmitSerializer,
     ParticipantSerializer,
     QuizQuestionSerializer,
     QuizSubmitSerializer,
@@ -90,29 +91,6 @@ STATUS_MESSAGES = [
     "Inathibitisha muunganiko wa kivuko…",
 ]
 
-PEER_REPLIES = [
-    "Vizuri sana! 🙌",
-    "Nakubaliana nawe.",
-    "Hii ni sehemu yangu pendwa ya historia yetu!",
-    "Sawa kabisa — tuendelee pamoja.",
-    "Hongera kwa ujasiri wako wa kujifunza historia ya taifa!",
-]
-
-
-def _peer_reply_text(user_text: str) -> str:
-    lowered = user_text.lower()
-    if any(w in lowered for w in ("1964", "muungano", "union", "april", "aprili")):
-        return "Ndio! 26 Aprili 1964 — siku muhimu kwa taifa letu. 🇹🇿"
-    if any(w in lowered for w in ("habari", "mambo", "salamu", "hello", "hi")):
-        return "Marahaba! Niko tayari kwa dhamira yetu ya pamoja 😊"
-    if any(w in lowered for w in ("asante", "thanks", "shukrani")):
-        return "Karibu sana! Muungano ni nguvu yetu pamoja. 💪"
-    if any(w in lowered for w in ("nyerere", "karume", "wazee", "baba")):
-        return "Wazee wetu walituacha urithi wa umoja — tuendelee kuheshimu. 🙏"
-    if "?" in user_text:
-        return "Swali zuri! Hebu tujaribu kujibu pamoja kwenye jaribio. 📝"
-    return random.choice(PEER_REPLIES)
-
 
 def _mission_peer(mission: Mission, participant: Participant) -> Participant:
     match = mission.match
@@ -128,58 +106,25 @@ def _opposite_region(region: str) -> str:
     return Region.VISIWANI if region == Region.BARA else Region.BARA
 
 
-def _find_peer(participant: Participant) -> Participant:
+def _find_peer(participant: Participant) -> Participant | None:
     opposite = _opposite_region(participant.region)
     waiting = (
         Participant.objects.filter(region=opposite, is_seed_peer=False)
         .exclude(id=participant.id)
         .exclude(matches_as_participant__status="active")
+        .exclude(matches_as_peer__status="active")
         .first()
     )
-    if waiting:
-        return waiting
-    seed = Participant.objects.filter(region=opposite, is_seed_peer=True).first()
-    if seed:
-        return seed
-    return Participant.objects.create(
-        name="Khadija Mrisho",
-        phone="0700 000 001",
-        college="Chuo cha Zanzibar",
-        home_area="Unguja",
-        region=Region.VISIWANI,
-        is_seed_peer=True,
-    )
+    return waiting
 
 
 def _seed_chat(mission: Mission, participant: Participant, peer: Participant) -> None:
     if mission.messages.exists():
         return
-    ChatMessage.objects.bulk_create(
-        [
-            ChatMessage(
-                mission=mission,
-                from_role="system",
-                text=f"Umeunganishwa na {peer.name.split()[0]} — {peer.region_label} 🌊",
-            ),
-            ChatMessage(
-                mission=mission,
-                sender=peer,
-                from_role="peer",
-                text="Habari! Niko tayari kwa Dhamira ya leo 😊",
-            ),
-            ChatMessage(
-                mission=mission,
-                sender=participant,
-                from_role="me",
-                text=f"Habari {peer.name.split()[0]}! Nami niko tayari — tuanze na jaribio?",
-            ),
-            ChatMessage(
-                mission=mission,
-                sender=peer,
-                from_role="peer",
-                text="Sawa! Muungano ulianzishwa mwaka gani, nadhani unajua 😉",
-            ),
-        ]
+    ChatMessage.objects.create(
+        mission=mission,
+        from_role="system",
+        text=f"Umeunganishwa na {peer.name.split()[0]} — {peer.region_label} 🌊",
     )
 
 
@@ -284,6 +229,17 @@ class MatchView(APIView):
 
         with transaction.atomic():
             peer = _find_peer(participant)
+            if not peer:
+                return Response(
+                    {
+                        "detail": (
+                            "Hakuna mwenza wa kusubiri kutoka mkoa wa pili. "
+                            "Mwalike rafiki au jaribu tena baada ya muda mfupi."
+                        ),
+                        "waiting": True,
+                    },
+                    status=status.HTTP_404_NOT_FOUND,
+                )
             match = Match.objects.create(participant=participant, peer=peer, status="active")
             mission = Mission.objects.create(match=match)
             _seed_chat(mission, participant, peer)
@@ -340,15 +296,6 @@ class MissionChatView(APIView):
             sender=participant,
             from_role="me",
             text=text,
-        )
-        peer = _mission_peer(mission, participant)
-        delay_seconds = random.uniform(1.4, 3.2)
-        ChatMessage.objects.create(
-            mission=mission,
-            sender=peer,
-            from_role="peer",
-            text=_peer_reply_text(text),
-            deliver_at=timezone.now() + timedelta(seconds=delay_seconds),
         )
         return Response(
             {"sent": ChatMessageSerializer(mine).data},
@@ -501,14 +448,12 @@ class LiveImpactView(APIView):
         bara = youth.filter(region=Region.BARA).count()
         visiwani = youth.filter(region=Region.VISIWANI).count()
         pairs_today = Match.objects.filter(created_at__date=today).count()
-        if pairs_today == 0:
-            pairs_today = max(Match.objects.filter(status="active").count(), 12)
 
         regions = set()
         for p in youth.only("home_area"):
             if p.home_area:
                 regions.add(p.home_area)
-        regions_active = len(regions) or 14
+        regions_active = len(regions)
 
         activity = []
         for m in Match.objects.select_related("participant", "peer").order_by("-created_at")[:5]:
@@ -545,13 +490,13 @@ class LiveImpactView(APIView):
         return Response(
             LiveImpactSerializer(
                 {
-                    "youth_connected": youth_count or 248,
+                    "youth_connected": youth_count,
                     "pairs_today": pairs_today,
-                    "certificates_issued": Certificate.objects.count() or 0,
+                    "certificates_issued": Certificate.objects.count(),
                     "regions_active": regions_active,
-                    "live_connections": MapConnection.objects.count() or pairs_today,
-                    "bara_youth": bara or max(youth_count // 2, 120),
-                    "visiwani_youth": visiwani or max(youth_count // 2, 128),
+                    "live_connections": MapConnection.objects.count(),
+                    "bara_youth": bara,
+                    "visiwani_youth": visiwani,
                     "activity": activity[:10],
                 }
             ).data
@@ -592,9 +537,8 @@ class AdminDashboardView(APIView):
                     "active_matches": Match.objects.filter(status="active").count(),
                     "completed_missions": Mission.objects.filter(status="completed").count(),
                     "certificates_issued": Certificate.objects.count(),
-                    "pairs_today": Match.objects.filter(created_at__date=today).count()
-                    or Match.objects.filter(status="active").count(),
-                    "regions_active": len(regions) or 14,
+                    "pairs_today": Match.objects.filter(created_at__date=today).count(),
+                    "regions_active": len(regions),
                     "bara_participants": bara,
                     "visiwani_participants": visiwani,
                     "recent_connections": connections,
@@ -616,8 +560,8 @@ class MapStatsView(APIView):
         return Response(
             MapStatsSerializer(
                 {
-                    "pairs_today": Match.objects.filter(status="active").count() or 128,
-                    "regions_active": len(regions) or 14,
+                    "pairs_today": Match.objects.filter(status="active").count(),
+                    "regions_active": len(regions),
                     "connections": connections,
                 }
             ).data
@@ -851,3 +795,102 @@ class AdminReportResolveView(APIView):
         report.resolved_at = timezone.now()
         report.save(update_fields=["status", "action_taken", "resolved_at"])
         return Response(ReportedItemSerializer(_serialize_report(report)).data)
+
+
+def _serialize_story(story: OralStory) -> dict:
+    return {
+        "id": story.id,
+        "title": story.title,
+        "author_name": story.author_name,
+        "body": story.body,
+        "status": story.status,
+        "created_at_label": _report_time_label(story.created_at),
+    }
+
+
+def _require_admin_key(request) -> Response | None:
+    from django.conf import settings
+
+    admin_key = getattr(settings, "ADMIN_DASHBOARD_KEY", "")
+    if admin_key and request.headers.get("X-Admin-Key") != admin_key:
+        return Response({"detail": "Admin key required."}, status=403)
+    return None
+
+
+class OralStorySubmitView(APIView):
+    def post(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+
+        serializer = OralStorySubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        responses = [r.strip() for r in serializer.validated_data["responses"] if r.strip()]
+        if not responses:
+            return Response({"detail": "Jibu angalau swali moja."}, status=400)
+
+        title_seed = responses[0][:80]
+        title = f"Hadithi ya Utamaduni — {title_seed}" if len(title_seed) < 60 else title_seed
+        body = "\n\n".join(f"{i + 1}. {text}" for i, text in enumerate(responses))
+
+        story = OralStory.objects.create(
+            participant=participant,
+            title=title,
+            body=body,
+            author_name=participant.name,
+            status=OralStory.Status.PENDING,
+        )
+        return Response(OralStorySerializer(_serialize_story(story)).data, status=status.HTTP_201_CREATED)
+
+
+class AdminStoriesView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        denied = _require_admin_key(request)
+        if denied:
+            return denied
+
+        status_filter = request.query_params.get("status", "pending")
+        if status_filter not in ("pending", "approved", "rejected"):
+            status_filter = "pending"
+        stories = OralStory.objects.filter(status=status_filter).order_by("-created_at")[:50]
+        return Response(OralStorySerializer([_serialize_story(s) for s in stories], many=True).data)
+
+
+class AdminStoryResolveView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, story_id):
+        denied = _require_admin_key(request)
+        if denied:
+            return denied
+
+        serializer = OralStoryResolveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
+        try:
+            story = OralStory.objects.get(id=story_id, status=OralStory.Status.PENDING)
+        except OralStory.DoesNotExist:
+            return Response({"detail": "Story not found or already reviewed."}, status=404)
+
+        story.status = (
+            OralStory.Status.APPROVED if action == "approve" else OralStory.Status.REJECTED
+        )
+        story.reviewed_at = timezone.now()
+        story.save(update_fields=["status", "reviewed_at"])
+        return Response(OralStorySerializer(_serialize_story(story)).data)
+
+
+class UssdBotView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request):
+        text = (request.data.get("text") or "").strip()
+        session_id = (request.data.get("session_id") or "").strip() or None
+        from api.ussd_bot import handle_ussd_message
+
+        return Response(handle_ussd_message(text, session_id))

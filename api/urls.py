@@ -3,6 +3,8 @@ from django.urls import path
 from api.views import (
     AcademyArticlesView,
     AdminDashboardView,
+    AdminStoriesView,
+    AdminStoryResolveView,
     CertificateGenerateView,
     CertificateVerifyView,
     ChemshaBongoView,
@@ -14,6 +16,7 @@ from api.views import (
     MissionChatView,
     MissionProgressView,
     MissionStepCompleteView,
+    OralStorySubmitView,
     QuizQuestionsView,
     QuizSubmitView,
     RegisterView,
@@ -23,6 +26,7 @@ from api.views import (
     LoginView,
     TimelineEventsView,
     UserMeView,
+    UssdBotView,
     WhatsAppBotView,
 )
 
@@ -45,9 +49,13 @@ urlpatterns = [
     path("reports", ReportCreateView.as_view(), name="report-create"),
     path("admin/reports", AdminReportsView.as_view(), name="admin-reports"),
     path("admin/reports/<uuid:report_id>/resolve", AdminReportResolveView.as_view(), name="admin-report-resolve"),
+    path("admin/stories", AdminStoriesView.as_view(), name="admin-stories"),
+    path("admin/stories/<uuid:story_id>/resolve", AdminStoryResolveView.as_view(), name="admin-story-resolve"),
+    path("stories/submit", OralStorySubmitView.as_view(), name="story-submit"),
     path("impact/live", LiveImpactView.as_view(), name="impact-live"),
     path("admin/dashboard", AdminDashboardView.as_view(), name="admin-dashboard"),
     path("map/stats", MapStatsView.as_view(), name="map-stats"),
     path("audio/archive", ElderAudioView.as_view(), name="audio-archive"),
     path("channels/whatsapp/chat", WhatsAppBotView.as_view(), name="whatsapp-bot"),
+    path("channels/ussd/session", UssdBotView.as_view(), name="ussd-bot"),
 ]

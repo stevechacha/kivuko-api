@@ -15,6 +15,7 @@ from api.models import (
     QuizSubmission,
     TimelineEvent,
     WhatsAppSession,
+    OralStory,
 )
 
 
@@ -85,6 +86,13 @@ class TimelineEventAdmin(admin.ModelAdmin):
 @admin.register(MissionStepProgress)
 class MissionStepProgressAdmin(admin.ModelAdmin):
     list_display = ("participant", "step_number", "completed_at")
+
+
+@admin.register(OralStory)
+class OralStoryAdmin(admin.ModelAdmin):
+    list_display = ("title", "author_name", "status", "created_at")
+    list_filter = ("status",)
+    search_fields = ("title", "author_name", "body")
 
 
 @admin.register(WhatsAppSession)

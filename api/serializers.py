@@ -245,5 +245,26 @@ class ChemshaBongoResultSerializer(serializers.Serializer):
     bonus_points = serializers.IntegerField()
     airtime_reward_tzs = serializers.IntegerField()
     message = serializers.CharField()
+
+
+class OralStorySubmitSerializer(serializers.Serializer):
+    responses = serializers.ListField(
+        child=serializers.CharField(max_length=2000),
+        min_length=1,
+        max_length=5,
+    )
+
+
+class OralStorySerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    title = serializers.CharField()
+    author_name = serializers.CharField()
+    body = serializers.CharField()
+    status = serializers.CharField()
+    created_at_label = serializers.CharField()
+
+
+class OralStoryResolveSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["approve", "reject"])
     patriotism_points = serializers.IntegerField()
     grade = serializers.DictField()

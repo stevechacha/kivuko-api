@@ -249,3 +249,32 @@ class WhatsAppSession(models.Model):
 
     def __str__(self) -> str:
         return f"WA {self.session_key[:8]}… ({self.points} pts)"
+
+
+class OralStory(models.Model):
+    """Culture-mission oral history submissions awaiting moderator review."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    participant = models.ForeignKey(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="oral_stories",
+    )
+    title = models.CharField(max_length=200)
+    body = models.TextField()
+    author_name = models.CharField(max_length=200)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
