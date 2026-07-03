@@ -66,10 +66,19 @@ def _session_payload(participant: Participant, message: str | None = None) -> di
         .order_by("-created_at")
         .first()
     )
+    active_mission_id = None
+    active_match_id = None
+    if active:
+        active_match_id = active.id
+        try:
+            active_mission_id = active.mission.id
+        except Mission.DoesNotExist:
+            active_mission_id = None
+
     payload = {
         "participant": participant,
-        "active_mission_id": active.mission_id if active else None,
-        "active_match_id": active.id if active else None,
+        "active_mission_id": active_mission_id,
+        "active_match_id": active_match_id,
     }
     if message:
         payload["message"] = message
