@@ -393,3 +393,24 @@ class RewardDisbursement(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class PeerRating(models.Model):
+    """Post-mission 5-star respect rating (Tier 2)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name="peer_ratings")
+    rater = models.ForeignKey(
+        Participant,
+        on_delete=models.CASCADE,
+        related_name="peer_ratings_given",
+    )
+    stars = models.PositiveSmallIntegerField()
+    comment = models.CharField(max_length=280, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        constraints = [
+            models.UniqueConstraint(fields=["mission", "rater"], name="unique_peer_rating_per_mission"),
+        ]

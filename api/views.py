@@ -2,7 +2,7 @@ from datetime import timedelta
 import random
 
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.response import Response
@@ -21,6 +21,7 @@ from api.models import (
     MissionStepProgress,
     OralStory,
     Participant,
+    PeerRating,
     GalaNominee,
     ElderStory,
     RewardDisbursement,
@@ -47,6 +48,8 @@ from api.serializers import (
     OralStorySerializer,
     OralStorySubmitSerializer,
     PlatformStatusSerializer,
+    PeerRatingSubmitSerializer,
+    PeerRatingSerializer,
     GalaToggleSerializer,
     ParticipantSerializer,
     QuizQuestionSerializer,
@@ -299,6 +302,10 @@ class MatchView(APIView):
             mission = Mission.objects.create(match=match)
             _seed_chat(mission, participant, peer)
 
+        from api.telco import notify_match_sms
+
+        notify_match_sms(participant, peer)
+
         return Response(
             MatchResultSerializer(_match_result_payload(match, mission, peer)).data,
             status=status.HTTP_201_CREATED,
@@ -378,6 +385,60 @@ class MissionChatView(APIView):
         )
         return Response(
             {"sent": ChatMessageSerializer(mine).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class PeerRatingView(APIView):
+    """5-star respect rating after Joint Mission (Tier 2)."""
+
+    def post(self, request, mission_id):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+
+        serializer = PeerRatingSubmitSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            mission = Mission.objects.select_related("match").get(id=mission_id)
+        except Mission.DoesNotExist:
+            return Response({"detail": "Mission not found."}, status=404)
+
+        if participant.id not in (mission.match.participant_id, mission.match.peer_id):
+            return Response({"detail": "Not allowed."}, status=403)
+
+        rating, _ = PeerRating.objects.update_or_create(
+            mission=mission,
+            rater=participant,
+            defaults={
+                "stars": serializer.validated_data["stars"],
+                "comment": serializer.validated_data.get("comment", ""),
+            },
+        )
+
+        peer = (
+            mission.match.peer
+            if mission.match.participant_id == participant.id
+            else mission.match.participant
+        )
+        avg = (
+            PeerRating.objects.filter(
+                Q(mission__match__participant=peer) | Q(mission__match__peer=peer),
+            )
+            .exclude(rater=peer)
+            .aggregate(avg=Avg("stars"))["avg"]
+        )
+
+        return Response(
+            PeerRatingSerializer(
+                {
+                    "id": rating.id,
+                    "stars": rating.stars,
+                    "comment": rating.comment,
+                    "peer_trust_avg": round(float(avg), 2) if avg else None,
+                }
+            ).data,
             status=status.HTTP_201_CREATED,
         )
 

@@ -31,6 +31,14 @@ from api.views import (
     UserMeView,
     UssdBotView,
     WhatsAppBotView,
+    PeerRatingView,
+)
+from api.tier_views import (
+    AiTutorView,
+    InstitutionStatsView,
+    PartnerReportPdfView,
+    Phase2RoadmapView,
+    PlatformBrandingView,
 )
 from api.extension_views import (
     AdminElderRadioToggleView,
@@ -61,6 +69,7 @@ urlpatterns = [
     path("users/me/steps/<int:step_number>/complete", MissionStepCompleteView.as_view(), name="step-complete"),
     path("matching/match", MatchView.as_view(), name="match"),
     path("missions/<uuid:mission_id>/chat", MissionChatView.as_view(), name="mission-chat"),
+    path("missions/<uuid:mission_id>/peer-rating", PeerRatingView.as_view(), name="peer-rating"),
     path("quiz/questions", QuizQuestionsView.as_view(), name="quiz-questions"),
     path("quiz/chemsha-bongo", ChemshaBongoView.as_view(), name="chemsha-bongo"),
     path("missions/<uuid:mission_id>/quiz/submit", QuizSubmitView.as_view(), name="quiz-submit"),
@@ -89,7 +98,12 @@ urlpatterns = [
     path("admin/rewards", AdminRewardsView.as_view(), name="admin-rewards"),
     path("admin/rewards/<uuid:reward_id>/disburse", AdminRewardDisburseView.as_view(), name="admin-reward-disburse"),
     path("institutions", InstitutionsListView.as_view(), name="institutions"),
+    path("institutions/<str:code>/stats", InstitutionStatsView.as_view(), name="institution-stats"),
     path("partner/dashboard", PartnerDashboardView.as_view(), name="partner-dashboard"),
+    path("partner/report/pdf", PartnerReportPdfView.as_view(), name="partner-report-pdf"),
+    path("platform/branding", PlatformBrandingView.as_view(), name="platform-branding"),
+    path("platform/phase2", Phase2RoadmapView.as_view(), name="phase2-roadmap"),
+    path("channels/ai-tutor", AiTutorView.as_view(), name="ai-tutor"),
     path("partner/radio", RadioPartnerView.as_view(), name="radio-partner"),
     path("gala/ceremony", GalaCeremonyView.as_view(), name="gala-ceremony"),
     path("impact/live", LiveImpactView.as_view(), name="impact-live"),

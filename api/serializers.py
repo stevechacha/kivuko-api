@@ -398,6 +398,7 @@ class GalaCeremonyYouthSerializer(serializers.Serializer):
 class GalaCeremonySerializer(serializers.Serializer):
     event_title = serializers.CharField()
     live_mode = serializers.BooleanField()
+    live_stream_url = serializers.CharField(allow_blank=True)
     youth_finalists = GalaCeremonyYouthSerializer(many=True)
     elder_finalists = ElderRadioEntrySerializer(many=True)
     total_certificates = serializers.IntegerField()
@@ -438,3 +439,56 @@ class RadioBroadcastScriptSerializer(serializers.Serializer):
     script_sw = serializers.CharField()
     script_en = serializers.CharField()
     nominees = ElderRadioEntrySerializer(many=True)
+
+
+class PlatformBrandingSerializer(serializers.Serializer):
+    ministry_mode = serializers.BooleanField()
+    program_name = serializers.CharField()
+    program_name_en = serializers.CharField()
+    tagline_sw = serializers.CharField()
+    tagline_en = serializers.CharField()
+    ussd_shortcode = serializers.CharField()
+    sms_shortcode = serializers.CharField()
+    sms_keyword = serializers.CharField()
+    live_stream_url = serializers.CharField(allow_blank=True)
+    whatsapp_display = serializers.CharField()
+    telco_configured = serializers.BooleanField()
+    auto_disburse_rewards = serializers.BooleanField()
+
+
+class InstitutionLeaderSerializer(serializers.Serializer):
+    rank = serializers.IntegerField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region_label = serializers.CharField()
+    patriotism_points = serializers.IntegerField()
+    grade = serializers.CharField()
+
+
+class InstitutionStatsSerializer(serializers.Serializer):
+    code = serializers.CharField()
+    name = serializers.CharField()
+    home_area = serializers.CharField()
+    region = serializers.CharField()
+    region_label = serializers.CharField()
+    youth_count = serializers.IntegerField()
+    pairs_active = serializers.IntegerField()
+    certificates = serializers.IntegerField()
+    leaderboard = InstitutionLeaderSerializer(many=True)
+
+
+class AiTutorSerializer(serializers.Serializer):
+    reply = serializers.CharField()
+    suggestions = serializers.ListField(child=serializers.CharField())
+
+
+class PeerRatingSubmitSerializer(serializers.Serializer):
+    stars = serializers.IntegerField(min_value=1, max_value=5)
+    comment = serializers.CharField(max_length=280, required=False, allow_blank=True)
+
+
+class PeerRatingSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    stars = serializers.IntegerField()
+    comment = serializers.CharField(allow_blank=True)
+    peer_trust_avg = serializers.FloatField(required=False)

@@ -162,3 +162,21 @@ PUBLIC_APP_BASE_URL = os.environ.get(
 
 ADMIN_DASHBOARD_KEY = os.environ.get("ADMIN_DASHBOARD_KEY", "")
 WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "MUUNGANO2026")
+WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_DISPLAY_NUMBER = os.environ.get("WHATSAPP_DISPLAY_NUMBER", "+255 000 000 000")
+
+AFRICASTALKING_USERNAME = os.environ.get("AFRICASTALKING_USERNAME", "")
+AFRICASTALKING_API_KEY = os.environ.get("AFRICASTALKING_API_KEY", "")
+AFRICASTALKING_SANDBOX = os.environ.get("AFRICASTALKING_SANDBOX", "true").lower() == "true"
+SMS_SENDER_ID = os.environ.get("SMS_SENDER_ID", "KIVUKO")
+SMS_SHORTCODE = os.environ.get("SMS_SHORTCODE", "15064")
+SMS_KEYWORD = os.environ.get("SMS_KEYWORD", "MUUNGANO")
+SMS_MATCH_NOTIFICATIONS = os.environ.get("SMS_MATCH_NOTIFICATIONS", "true").lower() == "true"
+USSD_SHORTCODE = os.environ.get("USSD_SHORTCODE", "*149*88#")
+LIVE_STREAM_URL = os.environ.get(
+    "LIVE_STREAM_URL",
+    "https://www.youtube.com/embed/jNQXAC9IVRw",
+)
+MINISTRY_MODE = os.environ.get("MINISTRY_MODE", "false").lower() == "true"
+AUTO_DISBURSE_REWARDS = os.environ.get("AUTO_DISBURSE_REWARDS", "true").lower() == "true"

@@ -43,6 +43,7 @@ from api.serializers import (
     RadioBroadcastScriptSerializer,
     UserRewardSerializer,
 )
+from api.telco import send_whatsapp_reply
 from api.views import (
     _report_time_label,
     _require_admin_key,
@@ -462,6 +463,7 @@ class GalaCeremonyView(APIView):
                 {
                     "event_title": "Gala ya Muungano na Uzalendo 2026",
                     "live_mode": True,
+                    "live_stream_url": getattr(settings, "LIVE_STREAM_URL", ""),
                     "youth_finalists": youth,
                     "elder_finalists": elders,
                     "total_certificates": Certificate.objects.count(),
@@ -523,9 +525,15 @@ class AdminRewardDisburseView(APIView):
             return Response({"detail": "Reward not found."}, status=404)
 
         if action == "send":
-            reward.status = RewardDisbursement.Status.SENT
-            reward.reference = reward.reference or f"KMH-{secrets.token_hex(4).upper()}"
-            reward.sent_at = timezone.now()
+            from api.rewards import attempt_disburse
+
+            attempt_disburse(reward)
+            reward.refresh_from_db()
+            if reward.status == RewardDisbursement.Status.PENDING:
+                reward.status = RewardDisbursement.Status.SENT
+                reward.reference = reward.reference or f"KMH-{secrets.token_hex(4).upper()}"
+                reward.sent_at = timezone.now()
+                reward.save(update_fields=["status", "reference", "sent_at"])
         elif action == "fail":
             reward.status = RewardDisbursement.Status.FAILED
         else:
@@ -579,6 +587,9 @@ class WhatsAppWebhookView(APIView):
                     if text:
                         bot = _whatsapp_bot_reply(text, session_id)
                         replies.append(bot)
+                        send_result = send_whatsapp_reply(session_id, bot.get("reply", ""))
+                        if send_result.get("status") == "sent":
+                            replies[-1]["whatsapp_sent"] = True
         return Response({"status": "ok", "replies": replies})
 
 
