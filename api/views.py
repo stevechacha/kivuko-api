@@ -731,53 +731,29 @@ class ChemshaBongoView(APIView):
         )
 
 
-def _whatsapp_bot_reply(text: str) -> str:
-    lowered = text.strip().lower()
-    if not lowered:
-        return (
-            "Habari Mzalendo! 🌊\n"
-            "Mimi ni Kivuko Bot. Andika *MUUNGANO* kuanza, au *JARIBIO* kwa maswali ya historia."
-        )
-    if lowered in ("muungano", "start", "anza", "hi", "habari"):
-        return (
-            "Karibu Kivuko la Muungano Hub! 🇹🇿\n\n"
-            "Jaribu la leo: Muungano wa Tanganyika na Zanzibar ulianzishwa tarehe gani?\n"
-            "A) 9 Desemba 1961\n"
-            "B) 26 Aprili 1964\n"
-            "C) 12 Januari 1964"
-        )
-    if "1964" in lowered or "b" in lowered.split() or "26" in lowered:
-        return "Sahihi! 🎉 +10 Pointi za Uzalendo.\nAndika *JARIBIO* kwa maswali zaidi, au *SIMU* kujisajili kwenye wavuti."
-    if lowered in ("jaribio", "quiz", "maswali"):
-        return (
-            "Swali 2: Nani alikuwa Rais wa kwanza wa Zanzibar?\n"
-            "A) Julius Nyerere\n"
-            "B) Abeid Amani Karume\n"
-            "C) Benjamin Mkapa"
-        )
-    if "karume" in lowered or lowered == "b":
-        return "Hongera! +10 Pointi za Uzalendo. ⭐\nTembelea wavuti kwa dhamira kamili na cheti cha QR."
-    if lowered in ("simu", "web", "wavuti", "register"):
-        return "Jisajili bure: kivuko-web-production.up.railway.app/usajili 📱"
-    if "?" in text:
-        return "Swali zuri! Kwa majibu kamili, jiunge na dhamira ya pamoja kwenye wavuti yetu."
-    return "Asante kwa ujumbe wako! Andika *JARIBIO* au *MUUNGANO* kuendelea. 🇹🇿"
+def _whatsapp_bot_reply(text: str, session_id: str | None = None) -> dict:
+    from api.whatsapp_bot import handle_whatsapp_message
+
+    bot_reply, key = handle_whatsapp_message(text, session_id)
+    return {
+        "reply": bot_reply.text,
+        "channel": "whatsapp",
+        "session_id": key,
+        "points": bot_reply.points,
+        "suggestions": bot_reply.suggestions,
+    }
 
 
 class WhatsAppBotView(APIView):
-    """Stateless WhatsApp-style civic bot for omnichannel demo."""
+    """Stateful WhatsApp civic bot — menu, quiz, lessons, timeline."""
 
     authentication_classes = []
     permission_classes = []
 
     def post(self, request):
         text = (request.data.get("text") or "").strip()
-        return Response(
-            {
-                "reply": _whatsapp_bot_reply(text),
-                "channel": "whatsapp",
-            }
-        )
+        session_id = (request.data.get("session_id") or "").strip() or None
+        return Response(_whatsapp_bot_reply(text, session_id))
 
 
 def _report_time_label(created_at) -> str:

@@ -14,6 +14,7 @@ from api.models import (
     QuizQuestion,
     QuizSubmission,
     TimelineEvent,
+    WhatsAppSession,
 )
 
 
@@ -84,3 +85,10 @@ class TimelineEventAdmin(admin.ModelAdmin):
 @admin.register(MissionStepProgress)
 class MissionStepProgressAdmin(admin.ModelAdmin):
     list_display = ("participant", "step_number", "completed_at")
+
+
+@admin.register(WhatsAppSession)
+class WhatsAppSessionAdmin(admin.ModelAdmin):
+    list_display = ("session_key", "points", "updated_at", "created_at")
+    search_fields = ("session_key",)
+    readonly_fields = ("session_key", "state", "created_at", "updated_at")

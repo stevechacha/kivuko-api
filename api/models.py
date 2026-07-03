@@ -233,3 +233,19 @@ class ContentReport(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class WhatsAppSession(models.Model):
+    """Per-chat state for the omnichannel WhatsApp learning bot."""
+
+    session_key = models.CharField(max_length=64, unique=True, db_index=True)
+    points = models.PositiveIntegerField(default=0)
+    state = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at"]
+
+    def __str__(self) -> str:
+        return f"WA {self.session_key[:8]}… ({self.points} pts)"
