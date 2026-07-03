@@ -1,63 +1,14 @@
 from django.db.models.signals import post_migrate
 
-from api.models import AcademyArticle, ElderAudio, MapConnection, Participant, QuizQuestion, Region, TimelineEvent
+from api.models import AcademyArticle, ElderAudio, MapConnection, Participant, Region, TimelineEvent
+from api.quiz_sync import sync_quiz_questions
 
 
 def seed_demo_data(sender, **kwargs):
     if sender.name != "api":
         return
 
-    if not QuizQuestion.objects.exists():
-        QuizQuestion.objects.bulk_create(
-            [
-                QuizQuestion(
-                    external_id="q1",
-                    question="Muungano wa Tanganyika na Zanzibar ulianzishwa tarehe gani?",
-                    options=["26 Aprili 1964", "9 Desemba 1961", "12 Januari 1964"],
-                    correct_index=0,
-                    sort_order=1,
-                ),
-                QuizQuestion(
-                    external_id="q2",
-                    question="Muungano uliunda nchi gani?",
-                    options=[
-                        "Jamhuri ya Kenya",
-                        "Jamhuri ya Muungano wa Tanzania",
-                        "Shirikisho la Afrika Mashariki",
-                    ],
-                    correct_index=1,
-                    sort_order=2,
-                ),
-                QuizQuestion(
-                    external_id="q3",
-                    question="Rais wa kwanza wa Zanzibar baada ya mapinduzi alikuwa nani?",
-                    options=["Julius K. Nyerere", "Abeid Amani Karume", "Ali Hassan Mwinyi"],
-                    correct_index=1,
-                    sort_order=3,
-                ),
-                QuizQuestion(
-                    external_id="q4",
-                    question="Mji mkuu wa Tanzania ni upi?",
-                    options=["Dar es Salaam", "Dodoma", "Zanzibar"],
-                    correct_index=1,
-                    sort_order=4,
-                ),
-                QuizQuestion(
-                    external_id="q5",
-                    question="Lugha rasmi ya Tanzania ni ipi?",
-                    options=["Kiingereza tu", "Kiswahili", "Kiarabu tu"],
-                    correct_index=1,
-                    sort_order=5,
-                ),
-                QuizQuestion(
-                    external_id="q6",
-                    question="Visiwa vikuu vya Zanzibar ni vipi?",
-                    options=["Unguja na Pemba", "Mafia na Pemba", "Lamu na Unguja"],
-                    correct_index=0,
-                    sort_order=6,
-                ),
-            ]
-        )
+    sync_quiz_questions()
 
     if not ElderAudio.objects.exists():
         ElderAudio.objects.bulk_create(

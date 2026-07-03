@@ -49,11 +49,13 @@ def _format_options(options: list[str]) -> str:
 
 
 def _menu_text(points: int) -> str:
+    total = len(_quiz_questions())
+    quiz_line = f"1️⃣ *JARIBIO* — Maswali {total} ya historia ya Muungano"
     pts = f"\n⭐ Pointi zako: *{points}*" if points else ""
     return (
         "📋 *Menyu ya Kivuko Bot*\n\n"
         "Chagua kwa kuandika neno au namba:\n\n"
-        "1️⃣ *JARIBIO* — Maswali ya historia ya Muungano\n"
+        f"{quiz_line}\n"
         "2️⃣ *SOMO* — Somo fupi kutoka Makumbusho\n"
         "3️⃣ *HISTORIA* — Mstari wa safari ya taifa\n"
         "4️⃣ *USAJILI* — Jiunge na dhamira za pamoja\n"
@@ -282,11 +284,16 @@ def handle_whatsapp_message(text: str, session_id: str | None = None) -> tuple[B
         if not questions:
             return reply("Maswali hayajapatikana kwa sasa. Jaribu tena baadaye.", ["MENYU"])
         state["mode"] = "quiz"
-        state["quiz_index"] = 0
-        state["quiz_correct"] = 0
+        # Resume mid-quiz unless user asks to restart
+        if lowered not in ("anza", "start", "upya", "reset") and state.get("quiz_index", 0) > 0:
+            idx = min(int(state.get("quiz_index", 0)), len(questions) - 1)
+        else:
+            state["quiz_index"] = 0
+            state["quiz_correct"] = 0
+            idx = 0
         total = len(questions)
         return reply(
-            _format_quiz_question(questions[0], 0, total),
+            _format_quiz_question(questions[idx], idx, total),
             ["A", "B", "C"],
         )
 
