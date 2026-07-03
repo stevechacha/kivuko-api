@@ -523,7 +523,7 @@ class LiveImpactView(APIView):
                     "subtitle": "Uoanishaji wa Kivuko umefanikiwa",
                 }
             )
-        for cert in Certificate.objects.select_related("participant").order_by("-issued_date")[:3]:
+        for cert in Certificate.objects.select_related("participant").order_by("-issued_at")[:3]:
             activity.append(
                 {
                     "id": f"cert-{cert.cert_code}",
