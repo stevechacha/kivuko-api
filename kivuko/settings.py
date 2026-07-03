@@ -139,6 +139,7 @@ CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_HEADERS = (
     *default_headers,
     "x-session-token",
+    "x-admin-key",
 )
 
 PUBLIC_VERIFY_BASE_URL = os.environ.get(
