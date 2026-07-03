@@ -203,3 +203,33 @@ class MissionStepProgress(models.Model):
     class Meta:
         unique_together = [("participant", "step_number")]
         ordering = ["step_number"]
+
+
+class ContentReport(models.Model):
+    class Reason(models.TextChoices):
+        ABUSIVE = "abusive_language", "Abusive language"
+        CONTACT = "contact_request", "Contact request"
+        INAPPROPRIATE = "inappropriate_content", "Inappropriate content"
+        OTHER = "other", "Other"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        RESOLVED = "resolved", "Resolved"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    mission = models.ForeignKey(Mission, on_delete=models.CASCADE, related_name="reports")
+    reporter = models.ForeignKey(
+        Participant, on_delete=models.CASCADE, related_name="reports_filed"
+    )
+    reported = models.ForeignKey(
+        Participant, on_delete=models.CASCADE, related_name="reports_received"
+    )
+    reason = models.CharField(max_length=32, choices=Reason.choices)
+    excerpt = models.TextField(blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    action_taken = models.CharField(max_length=16, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]

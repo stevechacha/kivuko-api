@@ -4,6 +4,7 @@ from api.models import (
     AcademyArticle,
     Certificate,
     ChatMessage,
+    ContentReport,
     ElderAudio,
     MapConnection,
     Match,
@@ -31,6 +32,12 @@ class MatchAdmin(admin.ModelAdmin):
 @admin.register(Mission)
 class MissionAdmin(admin.ModelAdmin):
     list_display = ("id", "match", "title", "status", "completed_at")
+
+
+@admin.register(ContentReport)
+class ContentReportAdmin(admin.ModelAdmin):
+    list_display = ("reported", "reporter", "reason", "status", "action_taken", "created_at")
+    list_filter = ("status", "reason")
 
 
 @admin.register(ChatMessage)

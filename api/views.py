@@ -12,6 +12,7 @@ from api.models import (
     AcademyArticle,
     Certificate,
     ChatMessage,
+    ContentReport,
     ElderAudio,
     MapConnection,
     Match,
@@ -42,6 +43,9 @@ from api.serializers import (
     QuizSubmitSerializer,
     LoginSerializer,
     RegisterSerializer,
+    ReportCreateSerializer,
+    ReportedItemSerializer,
+    ReportResolveSerializer,
     SendMessageSerializer,
     SessionSerializer,
     TimelineEventSerializer,
@@ -178,6 +182,11 @@ class RegisterView(APIView):
         serializer = RegisterSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        if not data.get("accepted_terms"):
+            return Response(
+                {"detail": "Lazima ukubali masharti ya uoanishaji na usalama."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         phone_key = _normalize_phone(data["phone"])
         existing = (
             Participant.objects.filter(is_seed_peer=False)
@@ -661,10 +670,11 @@ class LeaderboardView(APIView):
 
     def get(self, request):
         limit = min(int(request.query_params.get("limit", 10)), 20)
-        leaders = (
-            Participant.objects.filter(is_seed_peer=False)
-            .order_by("-patriotism_points", "created_at")[:limit]
-        )
+        region = request.query_params.get("region")
+        qs = Participant.objects.filter(is_seed_peer=False)
+        if region in (Region.BARA, Region.VISIWANI):
+            qs = qs.filter(region=region)
+        leaders = qs.order_by("-patriotism_points", "created_at")[:limit]
         entries = []
         for i, p in enumerate(leaders, start=1):
             entries.append(
@@ -759,3 +769,100 @@ class WhatsAppBotView(APIView):
                 "channel": "whatsapp",
             }
         )
+
+
+def _report_time_label(created_at) -> str:
+    delta = timezone.now() - created_at
+    minutes = int(delta.total_seconds() // 60)
+    if minutes < 1:
+        return "sasa hivi"
+    if minutes < 60:
+        return f"dakika {minutes} zilizopita"
+    hours = minutes // 60
+    if hours < 24:
+        return f"saa {hours} zilizopita"
+    return created_at.strftime("%d %b %Y")
+
+
+def _serialize_report(report: ContentReport) -> dict:
+    return {
+        "id": report.id,
+        "mission_id": report.mission_id,
+        "mission_title": report.mission.title,
+        "reporter_name": report.reporter.name.split()[0],
+        "reported_name": report.reported.name,
+        "reason": report.reason,
+        "excerpt": report.excerpt,
+        "reported_at_label": _report_time_label(report.created_at),
+        "status": report.status,
+    }
+
+
+class ReportCreateView(APIView):
+    def post(self, request):
+        participant = request.user
+        if not isinstance(participant, Participant):
+            return Response({"detail": "Authentication required."}, status=401)
+
+        serializer = ReportCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        mission_id = serializer.validated_data["mission_id"]
+        reason = serializer.validated_data["reason"]
+
+        mission = Mission.objects.select_related("match__peer", "match__participant").get(id=mission_id)
+        if participant.id not in (mission.match.participant_id, mission.match.peer_id):
+            return Response({"detail": "Not allowed."}, status=403)
+
+        reported = _mission_peer(mission, participant)
+        last_peer_msg = (
+            mission.messages.filter(from_role="peer").order_by("-created_at").first()
+        )
+        excerpt = last_peer_msg.text[:280] if last_peer_msg else ""
+
+        report = ContentReport.objects.create(
+            mission=mission,
+            reporter=participant,
+            reported=reported,
+            reason=reason,
+            excerpt=excerpt,
+        )
+        return Response(
+            ReportedItemSerializer(_serialize_report(report)).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class AdminReportsView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def get(self, request):
+        status_filter = request.query_params.get("status", "pending")
+        if status_filter not in ("pending", "resolved"):
+            status_filter = "pending"
+        reports = (
+            ContentReport.objects.select_related("mission", "reporter", "reported")
+            .filter(status=status_filter)
+            .order_by("-created_at")[:50]
+        )
+        return Response(ReportedItemSerializer([_serialize_report(r) for r in reports], many=True).data)
+
+
+class AdminReportResolveView(APIView):
+    authentication_classes = []
+    permission_classes = []
+
+    def post(self, request, report_id):
+        serializer = ReportResolveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        action = serializer.validated_data["action"]
+        try:
+            report = ContentReport.objects.get(id=report_id, status=ContentReport.Status.PENDING)
+        except ContentReport.DoesNotExist:
+            return Response({"detail": "Report not found or already resolved."}, status=404)
+
+        report.status = ContentReport.Status.RESOLVED
+        report.action_taken = action
+        report.resolved_at = timezone.now()
+        report.save(update_fields=["status", "action_taken", "resolved_at"])
+        return Response(ReportedItemSerializer(_serialize_report(report)).data)

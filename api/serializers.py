@@ -49,6 +49,30 @@ class RegisterSerializer(serializers.Serializer):
     college = serializers.CharField(max_length=200, required=False, allow_blank=True)
     home_area = serializers.CharField(max_length=120)
     region = serializers.ChoiceField(choices=["bara", "visiwani"])
+    accepted_terms = serializers.BooleanField()
+
+
+class ReportCreateSerializer(serializers.Serializer):
+    mission_id = serializers.UUIDField()
+    reason = serializers.ChoiceField(
+        choices=["abusive_language", "contact_request", "inappropriate_content", "other"]
+    )
+
+
+class ReportedItemSerializer(serializers.Serializer):
+    id = serializers.UUIDField()
+    mission_id = serializers.UUIDField()
+    mission_title = serializers.CharField()
+    reporter_name = serializers.CharField()
+    reported_name = serializers.CharField()
+    reason = serializers.CharField()
+    excerpt = serializers.CharField(allow_blank=True)
+    reported_at_label = serializers.CharField()
+    status = serializers.ChoiceField(choices=["pending", "resolved"])
+
+
+class ReportResolveSerializer(serializers.Serializer):
+    action = serializers.ChoiceField(choices=["dismiss", "warn", "suspend"])
 
 
 class LoginSerializer(serializers.Serializer):
